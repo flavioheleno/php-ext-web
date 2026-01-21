@@ -26,7 +26,7 @@ defineProps<{
           rel="noopener"
           class="hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
         >
-          Built with ♥ by Flavio Heleno
+          Built with ☕ by Flavio Heleno
         </a>
       </div>
     </div>
