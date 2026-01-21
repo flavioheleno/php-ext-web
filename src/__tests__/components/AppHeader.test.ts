@@ -110,7 +110,7 @@ describe('AppHeader', () => {
     mockIsDark.value = true
     const wrapper = mount(AppHeader, { props: defaultProps })
     
-    // Look for the sun icon path (has specific d attribute)
-    expect(wrapper.html()).toContain('M12 3v1m0 16v1m9-9h-1M4 12H3')
+    // Look for the sun icon path (has specific d attribute from heroicons)
+    expect(wrapper.html()).toContain('M12 3v2.25m6.364.386')
   })
 })

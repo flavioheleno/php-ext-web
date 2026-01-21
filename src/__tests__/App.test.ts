@@ -32,6 +32,7 @@ const mockSetSelectedExtension = vi.fn()
 const mockLoadBuilds = vi.fn().mockResolvedValue({})
 const mockInitialize = vi.fn()
 const mockNeedsBuildsLoaded = vi.fn().mockReturnValue(false)
+const mockInitializeFilters = vi.fn()
 
 // Reactive state for useStore
 const storeState = reactive({
@@ -64,7 +65,7 @@ vi.mock('@/composables/useDarkMode', () => ({
 vi.mock('@/composables/useStore', () => ({
   useStore: () => ({
     state: storeState,
-    buildCache: ref(new Map()),
+    buildCacheVersion: ref(0),
     setFilter: mockSetFilter,
     clearFilters: mockClearFilters,
     setView: mockSetView,
@@ -76,7 +77,8 @@ vi.mock('@/composables/useStore', () => ({
     ]),
     filterExtensions: vi.fn(exts => exts),
     getStats: vi.fn().mockReturnValue({ total: 10, pass: 10, fail: 0, successRate: 100 }),
-    needsBuildsLoaded: mockNeedsBuildsLoaded
+    needsBuildsLoaded: mockNeedsBuildsLoaded,
+    initializeFilters: mockInitializeFilters
   })
 }))
 
@@ -117,7 +119,7 @@ const stubs = {
   },
   GridView: { 
     template: '<div class="grid-view" @click="$emit(\'select-extension\', \'redis\')" />', 
-    props: ['extensions', 'metadata', 'latest'],
+    props: ['extensions', 'metadata', 'latest', 'filters'],
     emits: ['select-extension']
   },
   ListView: { 

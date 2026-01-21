@@ -113,34 +113,6 @@ describe('FilterSidebar', () => {
     expect(wrapper.emitted('update:filters')).toBeTruthy()
   })
 
-  it('shows active filter badges', () => {
-    const wrapper = mount(FilterSidebar, {
-      props: {
-        ...defaultProps,
-        filters: { ...defaultFilters, os: ['alpine|3.19'], phpVersion: ['8.3'] }
-      }
-    })
-    
-    expect(wrapper.text()).toContain('Active Filters')
-    expect(wrapper.text()).toContain('alpine 3.19')
-    expect(wrapper.text()).toContain('PHP 8.3')
-  })
-
-  it('removes filter when badge is clicked', async () => {
-    const wrapper = mount(FilterSidebar, {
-      props: {
-        ...defaultProps,
-        filters: { ...defaultFilters, os: ['alpine|3.19'] }
-      }
-    })
-    
-    const badgeButton = wrapper.findAll('button').find(b => b.text().includes('alpine 3.19'))
-    await badgeButton?.trigger('click')
-    
-    expect(wrapper.emitted('update:filters')).toBeTruthy()
-    expect(wrapper.emitted('update:filters')![0]).toEqual([{ os: [] }])
-  })
-
   it('shows clear all button when filters are active', () => {
     const wrapper = mount(FilterSidebar, {
       props: {

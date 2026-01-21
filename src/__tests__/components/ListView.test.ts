@@ -163,10 +163,10 @@ describe('ListView', () => {
       props: { extensions: mockExtensions }
     })
     
-    // Name is sorted by default (ascending)
-    expect(wrapper.html()).toContain('↑')
-    // Other columns show ↕
-    expect(wrapper.html()).toContain('↕')
+    // Name is sorted by default (ascending) - ChevronUpIcon has this path
+    expect(wrapper.html()).toContain('m4.5 15.75 7.5-7.5 7.5 7.5')
+    // Other columns show ChevronUpDownIcon with this path
+    expect(wrapper.html()).toContain('M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9')
   })
 
   it('has dark mode classes', () => {

@@ -447,7 +447,8 @@ describe('DetailModal build sorting', () => {
     if (osHeader) {
       // Default is already sorted by platform asc, clicking toggles to desc
       await osHeader.trigger('click')
-      expect(osHeader.text()).toContain('↓')
+      // ChevronDownIcon path indicates descending sort
+      expect(osHeader.html()).toContain('m19.5 8.25-7.5 7.5-7.5-7.5')
     }
   })
 
@@ -468,7 +469,8 @@ describe('DetailModal build sorting', () => {
     const phpHeader = headers.find(h => h.text().includes('PHP'))
     if (phpHeader) {
       await phpHeader.trigger('click')
-      expect(phpHeader.text()).toContain('↑')
+      // ChevronUpIcon path indicates ascending sort
+      expect(phpHeader.html()).toContain('m4.5 15.75 7.5-7.5 7.5 7.5')
     }
   })
 
@@ -489,7 +491,8 @@ describe('DetailModal build sorting', () => {
     const archHeader = headers.find(h => h.text().includes('Arch'))
     if (archHeader) {
       await archHeader.trigger('click')
-      expect(archHeader.text()).toContain('↑')
+      // ChevronUpIcon path indicates ascending sort
+      expect(archHeader.html()).toContain('m4.5 15.75 7.5-7.5 7.5 7.5')
     }
   })
 
@@ -510,7 +513,8 @@ describe('DetailModal build sorting', () => {
     const statusHeader = headers.find(h => h.text().includes('Status'))
     if (statusHeader) {
       await statusHeader.trigger('click')
-      expect(statusHeader.text()).toContain('↑')
+      // ChevronUpIcon path indicates ascending sort
+      expect(statusHeader.html()).toContain('m4.5 15.75 7.5-7.5 7.5 7.5')
     }
   })
 
@@ -532,10 +536,12 @@ describe('DetailModal build sorting', () => {
     if (osHeader) {
       // Default is asc, first click toggles to desc
       await osHeader.trigger('click')
-      expect(osHeader.text()).toContain('↓')
+      // ChevronDownIcon path indicates descending sort
+      expect(osHeader.html()).toContain('m19.5 8.25-7.5 7.5-7.5-7.5')
       // Second click toggles back to asc
       await osHeader.trigger('click')
-      expect(osHeader.text()).toContain('↑')
+      // ChevronUpIcon path indicates ascending sort
+      expect(osHeader.html()).toContain('m4.5 15.75 7.5-7.5 7.5 7.5')
     }
   })
 
@@ -558,9 +564,9 @@ describe('DetailModal build sorting', () => {
     if (phpHeader) {
       await phpHeader.trigger('click')
       
-      // Now OS should show ↕ (inactive)
+      // Now OS should show ChevronUpDownIcon (inactive/neutral)
       const osHeader = headers.find(h => h.text().includes('OS'))
-      expect(osHeader?.text()).toContain('↕')
+      expect(osHeader?.html()).toContain('M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9')
     }
   })
 })

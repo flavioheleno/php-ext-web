@@ -68,18 +68,6 @@ const extOptions = computed(() => {
     }))
 })
 
-const activeBadges = computed(() => {
-  const badges: { key: string; value: string; label: string }[] = []
-  props.filters.os.forEach(v => {
-    const [os, ver] = v.split('|')
-    badges.push({ key: 'os', value: v, label: `${os} ${ver}` })
-  })
-  props.filters.phpVersion.forEach(v => badges.push({ key: 'phpVersion', value: v, label: `PHP ${v}` }))
-  props.filters.arch.forEach(v => badges.push({ key: 'arch', value: v, label: v }))
-  props.filters.extension.forEach(v => badges.push({ key: 'extension', value: v, label: v }))
-  return badges
-})
-
 const hasActiveFilters = computed(() => 
   props.filters.os.length > 0 || 
   props.filters.phpVersion.length > 0 || 
@@ -100,13 +88,6 @@ function toggleArrayFilter(key: 'os' | 'phpVersion' | 'arch' | 'extension', valu
   } else {
     emit('update:filters', { [key]: [...current, value] })
   }
-}
-
-function removeFilter(key: string, value: string) {
-  const filterKey = key as 'os' | 'phpVersion' | 'arch' | 'extension'
-  emit('update:filters', {
-    [filterKey]: props.filters[filterKey].filter((v) => v !== value),
-  })
 }
 </script>
 
@@ -293,22 +274,6 @@ function removeFilter(key: string, value: string) {
             />
             <span class="text-sm text-gray-700 dark:text-gray-300 font-mono">{{ opt.label }}</span>
           </label>
-        </div>
-      </div>
-
-      <!-- Active Filters -->
-      <div v-if="activeBadges.length" class="space-y-2">
-        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Filters</div>
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="badge in activeBadges"
-            :key="`${badge.key}-${badge.value}`"
-            @click="removeFilter(badge.key, badge.value)"
-            class="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 text-xs font-medium rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors group"
-          >
-            {{ badge.label }}
-            <XMarkIcon class="w-3 h-3 opacity-60 group-hover:opacity-100" />
-          </button>
         </div>
       </div>
 

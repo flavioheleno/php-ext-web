@@ -17,15 +17,15 @@ import { useDebounce } from './composables/useDebounce'
 import type { Filters } from './types'
 
 const { metadata, latest, loading, error, initialize } = useDataLoader()
-const { state, buildCache, setFilter, clearFilters, setView, setSelectedExtension, loadBuilds, processExtensions, filterExtensions, getStats, needsBuildsLoaded } = useStore()
+const { state, buildCacheVersion, setFilter, clearFilters, setView, setSelectedExtension, loadBuilds, processExtensions, filterExtensions, getStats, needsBuildsLoaded, initializeFilters } = useStore()
 
 const showMobileSidebar = ref(false)
 const highlightedIndex = ref(-1)
 const mainContentRef = ref<HTMLElement | null>(null)
 
 const extensions = computed(() => {
-  // Trigger reactivity when buildCache changes
-  void buildCache.value.size
+  // Trigger reactivity when builds are loaded
+  void buildCacheVersion.value
   const processed = processExtensions(latest.value, metadata.value?.extensions)
   return filterExtensions(processed)
 })
@@ -56,17 +56,30 @@ const debouncedSetFilter = useDebounce((key: keyof Filters, value: any) => {
   setFilter(key, value)
 }, 150)
 
-// Load builds when detail filters are applied
+// Load builds when detail filters are applied or grid view is active
 watch(
-  () => [state.filters.os, state.filters.phpVersion, state.filters.arch],
+  () => [state.filters.os, state.filters.phpVersion, state.filters.arch, state.currentView, latest.value],
   async () => {
-    if (!needsBuildsLoaded() || !latest.value) return
+    // Load builds for grid view or when detail filters are applied
+    const needsBuilds = state.currentView === 'grid' || needsBuildsLoaded()
+    if (!needsBuilds || !latest.value) return
     
     // Load builds for all extensions
     const paths = Object.values(latest.value).map(ext => ext.path)
     await Promise.all(paths.map(path => loadBuilds(path)))
   },
   { deep: true }
+)
+
+// Initialize filters when metadata loads
+watch(
+  () => metadata.value,
+  (meta) => {
+    if (meta) {
+      initializeFilters(meta)
+    }
+  },
+  { immediate: true }
 )
 
 // Keyboard navigation
@@ -263,6 +276,7 @@ onMounted(() => {
                 :extensions="extensions"
                 :metadata="metadata"
                 :latest="latest"
+                :filters="state.filters"
                 role="grid"
                 aria-label="Extension build matrix"
                 @select-extension="handleSelectExtension"

@@ -1,5 +1,13 @@
 import { reactive, ref, watch } from 'vue'
-import type { Filters, LatestData, ProcessedExtension, BuildResult } from '@/types'
+import type { Filters, LatestData, ProcessedExtension, BuildResult, Metadata } from '@/types'
+
+// Track if filters have been initialized with defaults
+let filtersInitialized = false
+
+// Track total counts of each filter type for "all selected" detection
+let totalOsCount = 0
+let totalPhpCount = 0
+let totalArchCount = 0
 
 const state = reactive({
   filters: {
@@ -17,6 +25,8 @@ const state = reactive({
 // Cache for loaded build reports
 const buildCache = ref<Map<string, BuildResult[]>>(new Map())
 const loadingBuilds = ref<Set<string>>(new Set())
+// Counter to trigger reactivity when builds are loaded
+const buildCacheVersion = ref(0)
 
 // Sync state to URL
 function syncToUrl() {
@@ -112,6 +122,7 @@ export function useStore() {
       if (!response.ok) throw new Error('Failed to load builds')
       const builds = await response.json()
       buildCache.value.set(path, builds)
+      buildCacheVersion.value++ // Trigger reactivity
       return builds
     } catch {
       return []
@@ -173,9 +184,12 @@ export function useStore() {
   }
 
   function filterExtensions(extensions: ProcessedExtension[]): ProcessedExtension[] {
-    const hasDetailFilters = state.filters.os.length > 0 || 
-                             state.filters.phpVersion.length > 0 || 
-                             state.filters.arch.length > 0
+    // Check if all filters are selected (equivalent to no filtering)
+    const allOsSelected = state.filters.os.length === 0 || state.filters.os.length === totalOsCount
+    const allPhpSelected = state.filters.phpVersion.length === 0 || state.filters.phpVersion.length === totalPhpCount
+    const allArchSelected = state.filters.arch.length === 0 || state.filters.arch.length === totalArchCount
+    
+    const hasDetailFilters = !(allOsSelected && allPhpSelected && allArchSelected)
 
     return extensions
       .filter((ext) => {
@@ -244,9 +258,57 @@ export function useStore() {
            state.filters.arch.length > 0
   }
 
+  // Initialize filters with all available options selected
+  function initializeFilters(metadata: Metadata) {
+    // Always set total counts for "all selected" detection
+    totalOsCount = 0
+    for (const [, data] of Object.entries(metadata.osVersions)) {
+      if (data.versions) {
+        totalOsCount += data.versions.length
+      }
+    }
+    totalPhpCount = Object.keys(metadata.phpVersions).length
+    totalArchCount = metadata.architectures.length
+
+    // Only initialize filter values if not already done and URL didn't have filters
+    if (filtersInitialized) return
+    
+    const params = new URLSearchParams(window.location.search)
+    const hasUrlFilters = params.has('os') || params.has('php') || params.has('arch')
+    
+    if (hasUrlFilters) {
+      filtersInitialized = true
+      return
+    }
+
+    // Populate OS filters with all OS versions
+    const osFilters: string[] = []
+    for (const [os, data] of Object.entries(metadata.osVersions)) {
+      if (data.versions) {
+        for (const version of data.versions) {
+          osFilters.push(`${os}|${version}`)
+        }
+      }
+    }
+    state.filters.os = osFilters
+
+    // Populate PHP version filters
+    state.filters.phpVersion = Object.keys(metadata.phpVersions).sort((a, b) => {
+      if (a === 'next') return 1
+      if (b === 'next') return -1
+      return a.localeCompare(b, undefined, { numeric: true })
+    })
+
+    // Populate architecture filters
+    state.filters.arch = [...metadata.architectures]
+
+    filtersInitialized = true
+  }
+
   return {
     state,
     buildCache,
+    buildCacheVersion,
     setFilter,
     clearFilters,
     setView,
@@ -257,5 +319,6 @@ export function useStore() {
     filterBuilds,
     getStats,
     needsBuildsLoaded,
+    initializeFilters,
   }
 }
