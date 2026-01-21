@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Create data directory
+        run: mkdir -p public/data
+
       - name: Fetch extensions.json
         run: |
           curl -sSL \
