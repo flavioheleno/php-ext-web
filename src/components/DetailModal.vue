@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { XMarkIcon, CheckIcon, ChevronUpDownIcon, ChevronUpIcon, ChevronDownIcon, ArrowTopRightOnSquareIcon, CubeIcon, ClockIcon } from '@heroicons/vue/24/outline'
 import { formatRelativeTime } from '@/composables/useFormat'
 import { useStore } from '@/composables/useStore'
 import type { LatestExtension, ExtensionMeta, BuildResult } from '@/types'
@@ -35,9 +36,11 @@ function toggleBuildSort(field: BuildSortField) {
   }
 }
 
-function getBuildSortIcon(field: BuildSortField): string {
-  if (buildSortField.value !== field) return '↕'
-  return buildSortDir.value === 'asc' ? '↑' : '↓'
+type SortIconType = 'neutral' | 'asc' | 'desc'
+
+function getBuildSortIconType(field: BuildSortField): SortIconType {
+  if (buildSortField.value !== field) return 'neutral'
+  return buildSortDir.value === 'asc' ? 'asc' : 'desc'
 }
 
 const sortedBuilds = computed(() => {
@@ -150,13 +153,11 @@ onUnmounted(() => {
           <div class="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
               <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shrink-0">
-                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
+                <CubeIcon class="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div class="min-w-0">
-                <h2 id="modal-title" class="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{{ extensionName }}</h2>
-                <div v-if="extensionData" class="text-sm text-gray-500 dark:text-gray-400">v{{ extensionData.version }}</div>
+                <h2 id="modal-title" class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 truncate">{{ extensionName }}</h2>
+                <div v-if="extensionData" class="text-sm text-gray-500 dark:text-gray-400 font-mono">v{{ extensionData.version }}</div>
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -168,9 +169,7 @@ onUnmounted(() => {
                 class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Close modal"
               >
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XMarkIcon class="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -261,24 +260,20 @@ onUnmounted(() => {
               <div class="grid grid-cols-2 gap-4">
                 <div class="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
                   <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <CheckIcon class="w-5 h-5 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <div class="text-sm text-green-600 dark:text-green-400">Passed</div>
-                    <div class="text-2xl font-bold text-green-700 dark:text-green-300">{{ extensionData.pass }}</div>
+                    <div class="text-xs font-medium uppercase tracking-wider text-green-600 dark:text-green-400">Passed</div>
+                    <div class="text-2xl font-semibold tabular-nums text-green-700 dark:text-green-300">{{ extensionData.pass }}</div>
                   </div>
                 </div>
                 <div class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl">
                   <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/50 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon class="w-5 h-5 text-red-600 dark:text-red-400" />
                   </div>
                   <div>
-                    <div class="text-sm text-red-600 dark:text-red-400">Failed</div>
-                    <div class="text-2xl font-bold text-red-700 dark:text-red-300">{{ extensionData.fail }}</div>
+                    <div class="text-xs font-medium uppercase tracking-wider text-red-600 dark:text-red-400">Failed</div>
+                    <div class="text-2xl font-semibold tabular-nums text-red-700 dark:text-red-300">{{ extensionData.fail }}</div>
                   </div>
                 </div>
               </div>
@@ -309,9 +304,7 @@ onUnmounted(() => {
                       <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12" />
                     </svg>
                     View on GitHub
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
+                    <ArrowTopRightOnSquareIcon class="w-3 h-3" />
                   </a>
                 </div>
               </div>
@@ -343,7 +336,9 @@ onUnmounted(() => {
                         >
                           <span class="inline-flex items-center gap-1">
                             OS
-                            <span class="text-gray-400">{{ getBuildSortIcon('platform') }}</span>
+                            <ChevronUpDownIcon v-if="getBuildSortIconType('platform') === 'neutral'" class="w-3 h-3 text-gray-400" />
+                            <ChevronUpIcon v-else-if="getBuildSortIconType('platform') === 'asc'" class="w-3 h-3 text-gray-400" />
+                            <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
                           </span>
                         </th>
                         <th 
@@ -352,7 +347,9 @@ onUnmounted(() => {
                         >
                           <span class="inline-flex items-center gap-1 justify-center">
                             PHP
-                            <span class="text-gray-400">{{ getBuildSortIcon('php_version') }}</span>
+                            <ChevronUpDownIcon v-if="getBuildSortIconType('php_version') === 'neutral'" class="w-3 h-3 text-gray-400" />
+                            <ChevronUpIcon v-else-if="getBuildSortIconType('php_version') === 'asc'" class="w-3 h-3 text-gray-400" />
+                            <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
                           </span>
                         </th>
                         <th 
@@ -361,7 +358,9 @@ onUnmounted(() => {
                         >
                           <span class="inline-flex items-center gap-1 justify-center">
                             Arch
-                            <span class="text-gray-400">{{ getBuildSortIcon('arch') }}</span>
+                            <ChevronUpDownIcon v-if="getBuildSortIconType('arch') === 'neutral'" class="w-3 h-3 text-gray-400" />
+                            <ChevronUpIcon v-else-if="getBuildSortIconType('arch') === 'asc'" class="w-3 h-3 text-gray-400" />
+                            <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
                           </span>
                         </th>
                         <th 
@@ -370,7 +369,9 @@ onUnmounted(() => {
                         >
                           <span class="inline-flex items-center gap-1 justify-center">
                             Status
-                            <span class="text-gray-400">{{ getBuildSortIcon('status') }}</span>
+                            <ChevronUpDownIcon v-if="getBuildSortIconType('status') === 'neutral'" class="w-3 h-3 text-gray-400" />
+                            <ChevronUpIcon v-else-if="getBuildSortIconType('status') === 'asc'" class="w-3 h-3 text-gray-400" />
+                            <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
                           </span>
                         </th>
                         <th class="px-4 py-2"></th>
@@ -403,7 +404,9 @@ onUnmounted(() => {
                                 : 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
                             ]"
                           >
-                            {{ build.status === 'success' ? '✓ pass' : '✗ fail' }}
+                            <CheckIcon v-if="build.status === 'success'" class="w-3 h-3 stroke-[3]" />
+                            <XMarkIcon v-else class="w-3 h-3 stroke-[3]" />
+                            {{ build.status === 'success' ? 'pass' : 'fail' }}
                           </span>
                         </td>
                         <td class="px-4 py-2 text-center">
@@ -416,9 +419,7 @@ onUnmounted(() => {
                             title="View logs"
                             aria-label="View build logs"
                           >
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
+                            <ArrowTopRightOnSquareIcon class="w-4 h-4" />
                           </a>
                         </td>
                       </tr>
@@ -431,9 +432,7 @@ onUnmounted(() => {
             <!-- History Tab -->
             <div v-else-if="activeTab === 'history'" class="h-full flex flex-col items-center justify-center p-6 text-center">
               <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                <svg class="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <ClockIcon class="w-8 h-8 text-gray-400" />
               </div>
               <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Build History</h3>
               <p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs">

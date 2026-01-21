@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { ChevronUpIcon, ChevronDownIcon, ChevronUpDownIcon, FaceFrownIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
 import { formatRelativeTime } from '@/composables/useFormat'
 import type { ProcessedExtension } from '@/types'
 
@@ -63,21 +64,21 @@ function getProgressColor(rate: number): string {
   return 'bg-red-500'
 }
 
-function getSortIcon(field: SortField): string {
-  if (sortField.value !== field) return '↕'
-  return sortDir.value === 'asc' ? '↑' : '↓'
+type SortIconType = 'neutral' | 'asc' | 'desc'
+
+function getSortIconType(field: SortField): SortIconType {
+  if (sortField.value !== field) return 'neutral'
+  return sortDir.value === 'asc' ? 'asc' : 'desc'
 }
 </script>
 
 <template>
   <div v-if="extensions.length === 0" class="flex flex-col items-center justify-center gap-4 py-16 text-gray-500 dark:text-gray-400">
     <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-      <svg class="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+      <FaceFrownIcon class="w-8 h-8 text-gray-400" />
     </div>
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">No extensions found</h3>
-    <p class="text-sm text-gray-500 dark:text-gray-400">Try adjusting your filters or search query</p>
+    <h3 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">No extensions found</h3>
+    <p class="text-sm text-gray-500 dark:text-gray-400 tracking-wide">Try adjusting your filters or search query</p>
   </div>
 
   <div v-else class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -86,47 +87,57 @@ function getSortIcon(field: SortField): string {
         <tr>
           <th 
             @click="toggleSort('name')"
-            class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
+            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
           >
             <span class="inline-flex items-center gap-1">
               Extension
-              <span class="text-gray-400">{{ getSortIcon('name') }}</span>
+              <ChevronUpDownIcon v-if="getSortIconType('name') === 'neutral'" class="w-3 h-3 text-gray-400" />
+              <ChevronUpIcon v-else-if="getSortIconType('name') === 'asc'" class="w-3 h-3 text-gray-400" />
+              <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
             </span>
           </th>
           <th 
             @click="toggleSort('version')"
-            class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none hidden sm:table-cell"
+            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none hidden sm:table-cell"
           >
             <span class="inline-flex items-center gap-1">
               Version
-              <span class="text-gray-400">{{ getSortIcon('version') }}</span>
+              <ChevronUpDownIcon v-if="getSortIconType('version') === 'neutral'" class="w-3 h-3 text-gray-400" />
+              <ChevronUpIcon v-else-if="getSortIconType('version') === 'asc'" class="w-3 h-3 text-gray-400" />
+              <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
             </span>
           </th>
           <th 
             @click="toggleSort('total')"
-            class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
+            class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
           >
             <span class="inline-flex items-center gap-1">
               Builds
-              <span class="text-gray-400">{{ getSortIcon('total') }}</span>
+              <ChevronUpDownIcon v-if="getSortIconType('total') === 'neutral'" class="w-3 h-3 text-gray-400" />
+              <ChevronUpIcon v-else-if="getSortIconType('total') === 'asc'" class="w-3 h-3 text-gray-400" />
+              <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
             </span>
           </th>
           <th 
             @click="toggleSort('successRate')"
-            class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none min-w-[200px]"
+            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none min-w-[200px]"
           >
             <span class="inline-flex items-center gap-1">
               Success Rate
-              <span class="text-gray-400">{{ getSortIcon('successRate') }}</span>
+              <ChevronUpDownIcon v-if="getSortIconType('successRate') === 'neutral'" class="w-3 h-3 text-gray-400" />
+              <ChevronUpIcon v-else-if="getSortIconType('successRate') === 'asc'" class="w-3 h-3 text-gray-400" />
+              <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
             </span>
           </th>
           <th 
             @click="toggleSort('updated_at')"
-            class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none hidden md:table-cell"
+            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none hidden md:table-cell"
           >
             <span class="inline-flex items-center gap-1">
               Updated
-              <span class="text-gray-400">{{ getSortIcon('updated_at') }}</span>
+              <ChevronUpDownIcon v-if="getSortIconType('updated_at') === 'neutral'" class="w-3 h-3 text-gray-400" />
+              <ChevronUpIcon v-else-if="getSortIconType('updated_at') === 'asc'" class="w-3 h-3 text-gray-400" />
+              <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
             </span>
           </th>
           <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-20"></th>
@@ -184,9 +195,7 @@ function getSortIcon(field: SortField): string {
               class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/50 transition-colors opacity-0 group-hover:opacity-100"
               title="View details"
             >
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRightIcon class="w-5 h-5" />
             </button>
           </td>
         </tr>

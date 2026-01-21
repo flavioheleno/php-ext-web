@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 @source "../index.html";
 @source "./**/*.vue";
@@ -7,6 +8,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --color-primary: #0066cc;
   --color-primary-dark: #0052a3;
   --color-primary-light: #e6f0ff;

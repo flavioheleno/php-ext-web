@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ArchiveBoxIcon, CheckIcon, XMarkIcon, Squares2X2Icon, Bars4Icon } from '@heroicons/vue/24/outline'
 
 const props = defineProps<{
   total: number
@@ -33,13 +34,11 @@ const rateStrokeColor = computed(() => {
       <div class="flex flex-wrap items-center gap-4 sm:gap-6">
         <div class="flex items-center gap-2">
           <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-            <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
+            <ArchiveBoxIcon class="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </div>
           <div>
-            <div class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{{ total.toLocaleString() }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total</div>
+            <div class="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">{{ total.toLocaleString() }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Total</div>
           </div>
         </div>
 
@@ -47,13 +46,11 @@ const rateStrokeColor = computed(() => {
 
         <div class="flex items-center gap-2">
           <div class="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-900/30 flex items-center justify-center">
-            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
+            <CheckIcon class="w-5 h-5 text-green-600 dark:text-green-400" />
           </div>
           <div>
-            <div class="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{{ pass.toLocaleString() }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Passed</div>
+            <div class="text-xl sm:text-2xl font-semibold tabular-nums text-green-600 dark:text-green-400">{{ pass.toLocaleString() }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Passed</div>
           </div>
         </div>
 
@@ -61,13 +58,11 @@ const rateStrokeColor = computed(() => {
 
         <div class="flex items-center gap-2">
           <div class="w-10 h-10 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
-            <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XMarkIcon class="w-5 h-5 text-red-600 dark:text-red-400" />
           </div>
           <div>
-            <div class="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{{ fail.toLocaleString() }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Failed</div>
+            <div class="text-xl sm:text-2xl font-semibold tabular-nums text-red-600 dark:text-red-400">{{ fail.toLocaleString() }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Failed</div>
           </div>
         </div>
 
@@ -88,8 +83,8 @@ const rateStrokeColor = computed(() => {
             </svg>
           </div>
           <div>
-            <div :class="['text-xl sm:text-2xl font-bold', rateColorClass]">{{ successRate }}%</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Success</div>
+            <div :class="['text-xl sm:text-2xl font-semibold tabular-nums', rateColorClass]">{{ successRate }}%</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Success</div>
           </div>
         </div>
       </div>
@@ -106,9 +101,7 @@ const rateStrokeColor = computed(() => {
           ]"
           title="Grid view"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-          </svg>
+          <Squares2X2Icon class="w-4 h-4" />
           <span class="hidden sm:inline">Grid</span>
         </button>
         <button
@@ -121,9 +114,7 @@ const rateStrokeColor = computed(() => {
           ]"
           title="List view"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
+          <Bars4Icon class="w-4 h-4" />
           <span class="hidden sm:inline">List</span>
         </button>
       </div>

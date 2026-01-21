@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Bars3Icon, CubeIcon, SunIcon, MoonIcon } from '@heroicons/vue/24/outline'
 import { useDarkMode } from '@/composables/useDarkMode'
 
 defineProps<{
@@ -23,28 +24,24 @@ const { isDark, toggle } = useDarkMode()
         class="lg:hidden p-2 -ml-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
         aria-label="Toggle filters"
       >
-        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+        <Bars3Icon class="w-6 h-6" />
       </button>
       
       <div class="flex items-center gap-3 flex-1">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-          <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
+          <CubeIcon class="w-6 h-6 text-white" />
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{{ title }}</h1>
+            <h1 class="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-white">{{ title }}</h1>
             <span
               v-if="extensionCount"
-              class="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-full"
+              class="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full tabular-nums"
             >
               {{ extensionCount }} extensions
             </span>
           </div>
-          <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">{{ subtitle }}</p>
+          <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block tracking-wide">{{ subtitle }}</p>
         </div>
       </div>
 
@@ -61,14 +58,8 @@ const { isDark, toggle } = useDarkMode()
           class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
           :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
         >
-          <!-- Sun icon (shown in dark mode) -->
-          <svg v-if="isDark" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <!-- Moon icon (shown in light mode) -->
-          <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
+          <SunIcon v-if="isDark" class="w-5 h-5" />
+          <MoonIcon v-else class="w-5 h-5" />
         </button>
 
         <!-- GitHub link -->

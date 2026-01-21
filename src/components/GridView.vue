@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { CheckIcon, XMarkIcon, FaceFrownIcon } from '@heroicons/vue/24/outline'
 import type { ProcessedExtension, Metadata, LatestData } from '@/types'
 
 const props = defineProps<{
@@ -29,15 +30,17 @@ const osVersions = computed(() => {
 function getStatusClass(ext: ProcessedExtension): string {
   if (ext.fail === 0 && ext.pass > 0) return 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
   if (ext.pass === 0 && ext.fail > 0) return 'bg-red-500 hover:bg-red-600 text-white shadow-sm'
-  if (ext.pass > 0 && ext.fail > 0) return 'bg-gradient-to-br from-green-500 to-amber-500 hover:from-green-600 hover:to-amber-600 text-white shadow-sm'
+  if (ext.pass > 0 && ext.fail > 0) return 'bg-amber-400 hover:bg-amber-500 text-white shadow-sm'
   return 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
 }
 
-function getStatusText(ext: ProcessedExtension): string {
-  if (ext.fail === 0 && ext.pass > 0) return '✓'
-  if (ext.pass === 0 && ext.fail > 0) return '✗'
-  if (ext.pass > 0 && ext.fail > 0) return `${ext.successRate}%`
-  return '—'
+type StatusType = 'success' | 'failure' | 'mixed' | 'none'
+
+function getStatusType(ext: ProcessedExtension): StatusType {
+  if (ext.fail === 0 && ext.pass > 0) return 'success'
+  if (ext.pass === 0 && ext.fail > 0) return 'failure'
+  if (ext.pass > 0 && ext.fail > 0) return 'mixed'
+  return 'none'
 }
 
 function getTooltip(ext: ProcessedExtension): string {
@@ -48,28 +51,26 @@ function getTooltip(ext: ProcessedExtension): string {
 <template>
   <div v-if="extensions.length === 0" class="flex flex-col items-center justify-center gap-4 py-16 text-gray-500 dark:text-gray-400">
     <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-      <svg class="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+      <FaceFrownIcon class="w-8 h-8 text-gray-400" />
     </div>
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">No extensions found</h3>
-    <p class="text-sm text-gray-500 dark:text-gray-400">Try adjusting your filters or search query</p>
+    <h3 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">No extensions found</h3>
+    <p class="text-sm text-gray-500 dark:text-gray-400 tracking-wide">Try adjusting your filters or search query</p>
   </div>
 
   <div v-else class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-auto">
     <table class="w-full text-sm border-collapse">
       <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <tr>
-          <th class="sticky left-0 z-20 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700 min-w-[140px]">
+          <th class="sticky left-0 z-20 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700 min-w-[140px]">
             Extension
           </th>
           <th
             v-for="{ os, version } in osVersions"
             :key="`${os}-${version}`"
-            class="px-2 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-100 dark:border-gray-800 last:border-r-0"
+            class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-100 dark:border-gray-800 last:border-r-0"
           >
             <div class="whitespace-nowrap">{{ os }}</div>
-            <div class="text-gray-400 font-normal font-mono">{{ version }}</div>
+            <div class="text-gray-400 font-normal font-mono text-[10px]">{{ version }}</div>
           </th>
         </tr>
       </thead>
@@ -99,7 +100,14 @@ function getTooltip(ext: ProcessedExtension): string {
                 getStatusClass(ext)
               ]"
             >
-              {{ getStatusText(ext) }}
+              <!-- Success: checkmark icon -->
+              <CheckIcon v-if="getStatusType(ext) === 'success'" class="w-4 h-4 stroke-[3]" />
+              <!-- Failure: X icon -->
+              <XMarkIcon v-else-if="getStatusType(ext) === 'failure'" class="w-4 h-4 stroke-[3]" />
+              <!-- Mixed: percentage text -->
+              <span v-else-if="getStatusType(ext) === 'mixed'">{{ ext.successRate }}%</span>
+              <!-- None: dash -->
+              <span v-else>—</span>
             </button>
           </td>
         </tr>

@@ -111,10 +111,10 @@ describe('GridView', () => {
     expect(wrapper.html()).toContain('bg-red-500')
   })
 
-  it('applies gradient class for mixed results', () => {
+  it('applies amber class for mixed results', () => {
     const wrapper = mount(GridView, { props: defaultProps })
     
-    expect(wrapper.html()).toContain('bg-gradient-to-br')
+    expect(wrapper.html()).toContain('bg-amber-500')
   })
 
   it('displays extension versions', () => {
