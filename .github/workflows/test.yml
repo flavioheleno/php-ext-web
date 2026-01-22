@@ -22,7 +22,8 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Unit Tests
+    runs-on: ubuntu-slim
 
     steps:
       - name: Checkout repository

@@ -9,8 +9,9 @@ on:
         type: choice
         options:
           - ubuntu-latest
+          - ubuntu-slim
           - self-hosted
-        default: 'ubuntu-latest'
+        default: 'ubuntu-slim'
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -27,7 +28,7 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner || 'ubuntu-slim' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
