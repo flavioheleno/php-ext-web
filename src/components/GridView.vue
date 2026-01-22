@@ -252,7 +252,7 @@ function getCellTooltip(ext: ProcessedExtension, os: string, version: string, ph
                 style="width: 32px; min-width: 32px; max-width: 32px"
               >
                 <span 
-                  class="text-xs font-mono text-gray-400 dark:text-gray-500 whitespace-nowrap absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90"
+                  class="text-xs font-mono text-gray-400 dark:text-gray-500 whitespace-nowrap absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90"
                   style="width: max-content"
                 >{{ arch }}</span>
               </td>
