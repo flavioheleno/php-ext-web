@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { MagnifyingGlassIcon, CheckIcon, XMarkIcon, ChevronDownIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { CheckIcon, XMarkIcon, ChevronDownIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import type { Metadata, LatestData, Filters } from '@/types'
 
 const props = defineProps<{
@@ -94,20 +94,6 @@ function toggleArrayFilter(key: 'os' | 'phpVersion' | 'arch' | 'extension', valu
 <template>
   <aside class="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-y-auto hidden lg:block transition-colors">
     <div class="p-4 space-y-4">
-      <!-- Search -->
-      <div class="relative">
-        <label for="searchInput" class="sr-only">Search extensions</label>
-        <input
-          type="search"
-          id="searchInput"
-          :value="filters.search"
-          @input="updateFilter('search', ($event.target as HTMLInputElement).value)"
-          class="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow placeholder-gray-400 dark:placeholder-gray-500"
-          placeholder="Search extensions..."
-        />
-        <MagnifyingGlassIcon class="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-      </div>
-
       <!-- Status Filter (Pills) -->
       <div class="space-y-2">
         <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</label>

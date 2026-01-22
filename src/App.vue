@@ -233,7 +233,9 @@ onMounted(() => {
             :fail="stats.fail"
             :success-rate="stats.successRate"
             :current-view="state.currentView"
+            :search="state.filters.search"
             @update:view="setView"
+            @update:search="(val) => debouncedSetFilter('search', val)"
           />
 
           <div class="flex-1 overflow-auto p-4 sm:p-6">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArchiveBoxIcon, CheckIcon, XMarkIcon, Squares2X2Icon, Bars4Icon } from '@heroicons/vue/24/outline'
+import { ArchiveBoxIcon, CheckIcon, XMarkIcon, Squares2X2Icon, Bars4Icon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps<{
   total: number
@@ -8,10 +8,12 @@ const props = defineProps<{
   fail: number
   successRate: number
   currentView: 'grid' | 'list'
+  search: string
 }>()
 
 const emit = defineEmits<{
   'update:view': [view: 'grid' | 'list']
+  'update:search': [search: string]
 }>()
 
 const rateColorClass = computed(() => {
@@ -89,34 +91,51 @@ const rateStrokeColor = computed(() => {
         </div>
       </div>
 
-      <!-- View Switcher -->
-      <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 self-start sm:self-auto">
-        <button
-          @click="emit('update:view', 'grid')"
-          :class="[
-            'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-            currentView === 'grid'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-          ]"
-          title="Grid view"
-        >
-          <Squares2X2Icon class="w-4 h-4" />
-          <span class="hidden sm:inline">Grid</span>
-        </button>
-        <button
-          @click="emit('update:view', 'list')"
-          :class="[
-            'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-            currentView === 'list'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-          ]"
-          title="List view"
-        >
-          <Bars4Icon class="w-4 h-4" />
-          <span class="hidden sm:inline">List</span>
-        </button>
+      <!-- Search and View Switcher -->
+      <div class="flex items-center gap-3 self-start sm:self-auto">
+        <!-- Search Input -->
+        <div class="relative">
+          <label for="searchInput" class="sr-only">Search extensions</label>
+          <input
+            type="search"
+            id="searchInput"
+            :value="search"
+            @input="emit('update:search', ($event.target as HTMLInputElement).value)"
+            class="w-48 sm:w-56 pl-9 pr-3 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow placeholder-gray-400 dark:placeholder-gray-500"
+            placeholder="Search extensions..."
+          />
+          <MagnifyingGlassIcon class="absolute left-3 top-2 w-4 h-4 text-gray-400" />
+        </div>
+
+        <!-- View Switcher -->
+        <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+          <button
+            @click="emit('update:view', 'grid')"
+            :class="[
+              'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+              currentView === 'grid'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            ]"
+            title="Grid view"
+          >
+            <Squares2X2Icon class="w-4 h-4" />
+            <span class="hidden sm:inline">Grid</span>
+          </button>
+          <button
+            @click="emit('update:view', 'list')"
+            :class="[
+              'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+              currentView === 'list'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            ]"
+            title="List view"
+          >
+            <Bars4Icon class="w-4 h-4" />
+            <span class="hidden sm:inline">List</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
