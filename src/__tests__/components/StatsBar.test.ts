@@ -8,7 +8,8 @@ describe('StatsBar', () => {
     pass: 80,
     fail: 20,
     successRate: 80,
-    currentView: 'list' as const
+    currentView: 'list' as const,
+    search: ''
   }
 
   it('renders all stats correctly', () => {
@@ -117,6 +118,23 @@ describe('StatsBar', () => {
     expect(wrapper.html()).toContain('dark:bg-gray-900')
     expect(wrapper.html()).toContain('dark:border-gray-700')
     expect(wrapper.html()).toContain('dark:text-white')
+  })
+
+  it('renders search input', () => {
+    const wrapper = mount(StatsBar, { props: defaultProps })
+    
+    expect(wrapper.find('input[type="search"]').exists()).toBe(true)
+    expect(wrapper.find('input[type="search"]').attributes('placeholder')).toBe('Search extensions...')
+  })
+
+  it('emits update:search when search input changes', async () => {
+    const wrapper = mount(StatsBar, { props: defaultProps })
+    
+    const searchInput = wrapper.find('input[type="search"]')
+    await searchInput.setValue('redis')
+    
+    expect(wrapper.emitted('update:search')).toBeTruthy()
+    expect(wrapper.emitted('update:search')![0]).toEqual(['redis'])
   })
 
   it('renders labels correctly', () => {

@@ -37,23 +37,6 @@ describe('FilterSidebar', () => {
     filters: defaultFilters
   }
 
-  it('renders search input', () => {
-    const wrapper = mount(FilterSidebar, { props: defaultProps })
-    
-    expect(wrapper.find('input[type="search"]').exists()).toBe(true)
-    expect(wrapper.find('input[type="search"]').attributes('placeholder')).toBe('Search extensions...')
-  })
-
-  it('emits update:filters when search changes', async () => {
-    const wrapper = mount(FilterSidebar, { props: defaultProps })
-    
-    const searchInput = wrapper.find('input[type="search"]')
-    await searchInput.setValue('redis')
-    
-    expect(wrapper.emitted('update:filters')).toBeTruthy()
-    expect(wrapper.emitted('update:filters')![0]).toEqual([{ search: 'redis' }])
-  })
-
   it('renders status filter buttons', () => {
     const wrapper = mount(FilterSidebar, { props: defaultProps })
     
@@ -108,7 +91,8 @@ describe('FilterSidebar', () => {
     const wrapper = mount(FilterSidebar, { props: defaultProps })
     
     const checkboxes = wrapper.findAll('input[type="checkbox"]')
-    await checkboxes[0].setValue(true)
+    // First checkbox is the OS group checkbox (alpine), trigger change event
+    await checkboxes[0].trigger('change')
     
     expect(wrapper.emitted('update:filters')).toBeTruthy()
   })
@@ -176,7 +160,7 @@ describe('FilterSidebar', () => {
     
     expect(wrapper.html()).toContain('dark:bg-gray-900')
     expect(wrapper.html()).toContain('dark:border-gray-700')
-    expect(wrapper.html()).toContain('dark:text-gray-100')
+    expect(wrapper.html()).toContain('dark:text-gray-300')
   })
 
   it('handles null metadata gracefully', () => {
