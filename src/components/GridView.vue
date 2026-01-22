@@ -14,6 +14,11 @@ defineEmits<{
   'select-extension': [name: string]
 }>()
 
+// Sort extensions alphabetically by name
+const sortedExtensions = computed(() => {
+  return [...props.extensions].sort((a, b) => a.name.localeCompare(b.name))
+})
+
 // Get filtered architectures from filters (or all if none selected)
 const visibleArchitectures = computed(() => {
   if (props.filters.arch.length > 0) {
@@ -154,7 +159,7 @@ function getCellTooltip(ext: ProcessedExtension, os: string, version: string, ph
 
       <tbody>
         <!-- Extension rows: one group per extension, one row per PHP version -->
-        <template v-for="(ext, extIndex) in extensions" :key="ext.name">
+        <template v-for="(ext, extIndex) in sortedExtensions" :key="ext.name">
           <tr 
             v-for="(php, phpIndex) in visiblePhpVersions" 
             :key="`${ext.name}-${php}`"
