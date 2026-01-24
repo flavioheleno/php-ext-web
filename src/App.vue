@@ -30,11 +30,22 @@ const extensions = computed(() => {
   return filterExtensions(processed)
 })
 
-const extensionCount = computed(() => latest.value ? Object.keys(latest.value).length : 0)
+const extensionCount = computed(() => {
+  if (!latest.value) return 0
+  return Object.keys(latest.value).filter(k => k !== '_meta').length
+})
 
 const lastUpdated = computed(() => {
   if (!latest.value) return undefined
-  const dates = Object.values(latest.value).map(ext => ext.updated_at)
+  // Use pre-computed value if available
+  if (latest.value._meta?.latest_updated_at) {
+    return latest.value._meta.latest_updated_at
+  }
+  // Fallback to computing from data
+  const dates = Object.entries(latest.value)
+    .filter(([k]) => k !== '_meta')
+    .map(([, ext]) => (ext as { updated_at?: string }).updated_at)
+    .filter(Boolean) as string[]
   if (dates.length === 0) return undefined
   return dates.sort().reverse()[0]
 })

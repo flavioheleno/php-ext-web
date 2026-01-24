@@ -47,10 +47,17 @@ export interface LatestExtension {
   pass: number
   fail: number
   total: number
+  success_rate?: number
+}
+
+export interface LatestMeta {
+  latest_updated_at: string | null
+  processed_at: string
 }
 
 export interface LatestData {
-  [extension: string]: LatestExtension
+  _meta?: LatestMeta
+  [extension: string]: LatestExtension | LatestMeta | undefined
 }
 
 export interface BuildResult {

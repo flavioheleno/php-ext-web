@@ -84,6 +84,7 @@ jobs:
       - name: Pre-process data
         run: |
           bun scripts/generate-history.js --all
+          bun scripts/preprocess-latest.js
 
       - name: Build site
         run: bun run build

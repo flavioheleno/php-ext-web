@@ -1,5 +1,5 @@
 import { reactive, ref, watch } from 'vue'
-import type { Filters, LatestData, ProcessedExtension, BuildResult, Metadata } from '@/types'
+import type { Filters, LatestData, LatestExtension, ProcessedExtension, BuildResult, Metadata } from '@/types'
 
 // Track if filters have been initialized with defaults
 let filtersInitialized = false
@@ -134,17 +134,22 @@ export function useStore() {
   function processExtensions(latest: LatestData | null, _extensions: Record<string, unknown> = {}): ProcessedExtension[] {
     if (!latest) return []
 
-    return Object.entries(latest).map(([name, data]) => ({
-      name,
-      version: data.version,
-      updated_at: data.updated_at,
-      pass: data.pass,
-      fail: data.fail,
-      total: data.total,
-      successRate: data.total > 0 ? Math.round((data.pass / data.total) * 100) : 0,
-      path: data.path,
-      builds: buildCache.value.get(data.path),
-    }))
+    return Object.entries(latest)
+      .filter(([name]) => name !== '_meta')
+      .map(([name, data]) => {
+        const ext = data as LatestExtension
+        return {
+          name,
+          version: ext.version,
+          updated_at: ext.updated_at,
+          pass: ext.pass,
+          fail: ext.fail,
+          total: ext.total,
+          successRate: ext.success_rate ?? (ext.total > 0 ? Math.round((ext.pass / ext.total) * 100) : 0),
+          path: ext.path,
+          builds: buildCache.value.get(ext.path),
+        }
+      })
   }
 
   function filterBuilds(builds: BuildResult[]): BuildResult[] {

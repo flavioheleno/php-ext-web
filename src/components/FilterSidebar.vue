@@ -61,6 +61,7 @@ const archOptions = computed(() => {
 const extOptions = computed(() => {
   if (!props.latest) return []
   return Object.keys(props.latest)
+    .filter(k => k !== '_meta')
     .sort()
     .map((e) => ({
       label: e,
