@@ -207,6 +207,12 @@ describe('DetailModal', () => {
   })
 
   it('switches to history tab when clicked', async () => {
+    // Mock fetch for history data
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({})
+    })
+
     const wrapper = mount(DetailModal, {
       props: defaultProps,
       ...mountOptions
@@ -214,8 +220,10 @@ describe('DetailModal', () => {
     
     const historyTab = wrapper.findAll('button[role="tab"]').find(b => b.text().includes('History'))
     await historyTab?.trigger('click')
+    await flushPromises()
     
-    expect(wrapper.text()).toContain('Build History')
+    // Should show either loading or empty state
+    expect(wrapper.text()).toContain('History')
   })
 
   it('registers keydown listener on mount', () => {
@@ -568,5 +576,231 @@ describe('DetailModal build sorting', () => {
       const osHeader = headers.find(h => h.text().includes('OS'))
       expect(osHeader?.html()).toContain('M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9')
     }
+  })
+})
+
+// Tests for history tab
+describe('DetailModal history tab', () => {
+  const mockExtensionData: LatestExtension = {
+    version: '2.3.10',
+    pass: 10,
+    fail: 2,
+    total: 12,
+    path: 'history/2026/01/23/xhprof-2.3.10-21286133725.json',
+    updated_at: '2024-01-15T12:00:00Z'
+  }
+
+  const mockExtensionMeta: ExtensionMeta = {
+    dependencies: {},
+    pecl_name: 'xhprof',
+    track_url: 'https://github.com/xhprof/xhprof',
+    type: 'pecl',
+    last_checked: '2024-01-15',
+    latest_version: '2.3.10'
+  }
+
+  const defaultProps = {
+    show: true,
+    extensionName: 'xhprof',
+    extensionData: mockExtensionData,
+    extensionMeta: mockExtensionMeta
+  }
+
+  const mountOptions = {
+    global: {
+      stubs: {
+        Teleport: true
+      }
+    }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows empty state when no history file exists', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({})
+    })
+
+    const wrapper = mount(DetailModal, {
+      props: defaultProps,
+      ...mountOptions
+    })
+
+    const historyTab = wrapper.findAll('button[role="tab"]').find(b => b.text().includes('History'))
+    await historyTab?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No Build History')
+    expect(wrapper.text()).toContain('Build history is not available')
+  })
+
+  it('shows loading state while fetching history', async () => {
+    let resolvePromise: any
+    const fetchPromise = new Promise((resolve) => {
+      resolvePromise = resolve
+    })
+
+    global.fetch = vi.fn().mockReturnValue(fetchPromise)
+
+    const wrapper = mount(DetailModal, {
+      props: { ...defaultProps, show: false },
+      ...mountOptions
+    })
+
+    await wrapper.setProps({ show: true })
+    
+    const historyTab = wrapper.findAll('button[role="tab"]').find(b => b.text().includes('History'))
+    await historyTab?.trigger('click')
+
+    // Should show loading spinner
+    expect(wrapper.find('.spinner').exists()).toBe(true)
+
+    // Resolve the promise
+    resolvePromise({
+      ok: false,
+      json: async () => ({})
+    })
+    await flushPromises()
+  })
+
+  it('displays history chart when data is loaded', async () => {
+    const mockHistoryData = {
+      extension: 'xhprof',
+      version: '2.3.10',
+      snapshots: [
+        {
+          id: '123456',
+          date: '2026-01-21',
+          trigger: 'Scheduled build',
+          php_versions: {
+            '8.3': { pass: 15, fail: 1, total: 16, success_rate: 94 },
+            '8.4': { pass: 12, fail: 4, total: 16, success_rate: 75 }
+          },
+          platforms: {
+            '8.3': [
+              { platform: 'alpine', version: '3.19', x86_64: 'success', aarch64: 'success' }
+            ],
+            '8.4': [
+              { platform: 'alpine', version: '3.19', x86_64: 'failure', aarch64: 'success' }
+            ]
+          }
+        }
+      ]
+    }
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockHistoryData
+    })
+
+    const wrapper = mount(DetailModal, {
+      props: { ...defaultProps, show: false },
+      ...mountOptions
+    })
+
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    const historyTab = wrapper.findAll('button[role="tab"]').find(b => b.text().includes('History'))
+    await historyTab?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Success Rate Trends')
+    expect(wrapper.text()).toContain('1 builds')
+  })
+
+  it('loads history file from correct path', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({})
+    })
+    global.fetch = mockFetch
+
+    const wrapper = mount(DetailModal, {
+      props: { ...defaultProps, show: false },
+      ...mountOptions
+    })
+
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    expect(mockFetch).toHaveBeenCalledWith('/data/reports/xhprof/2.3.10-history.json')
+  })
+
+  it('handles fetch errors gracefully', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
+
+    const wrapper = mount(DetailModal, {
+      props: { ...defaultProps, show: false },
+      ...mountOptions
+    })
+
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    const historyTab = wrapper.findAll('button[role="tab"]').find(b => b.text().includes('History'))
+    await historyTab?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No Build History')
+    expect(consoleErrorSpy).toHaveBeenCalled()
+    
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('transforms history data correctly', async () => {
+    const mockHistoryData = {
+      extension: 'xhprof',
+      version: '2.3.10',
+      snapshots: [
+        {
+          id: '123',
+          date: '2026-01-21',
+          trigger: 'Scheduled build',
+          php_versions: {
+            '8.3': { pass: 16, fail: 0, total: 16, success_rate: 100 }
+          },
+          platforms: {
+            '8.3': []
+          }
+        },
+        {
+          id: '456',
+          date: '2026-01-22',
+          trigger: 'Scheduled build',
+          php_versions: {
+            '8.3': { pass: 15, fail: 1, total: 16, success_rate: 94 }
+          },
+          platforms: {
+            '8.3': []
+          }
+        }
+      ]
+    }
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockHistoryData
+    })
+
+    const wrapper = mount(DetailModal, {
+      props: { ...defaultProps, show: false },
+      ...mountOptions
+    })
+
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    const historyTab = wrapper.findAll('button[role="tab"]').find(b => b.text().includes('History'))
+    await historyTab?.trigger('click')
+    await flushPromises()
+
+    // Should show 2 snapshots
+    expect(wrapper.text()).toContain('2 builds')
   })
 })

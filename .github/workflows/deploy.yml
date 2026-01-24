@@ -81,6 +81,10 @@ jobs:
           # Cleanup
           rm -rf /tmp/php-ext-farm-data
 
+      - name: Pre-process data
+        run: |
+          bun scripts/generate-history.js --all
+
       - name: Build site
         run: bun run build
 

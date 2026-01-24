@@ -1,9 +1,50 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { XMarkIcon, CheckIcon, ChevronUpDownIcon, ChevronUpIcon, ChevronDownIcon, ArrowTopRightOnSquareIcon, CubeIcon, ClockIcon } from '@heroicons/vue/24/outline'
+import { XMarkIcon, CheckIcon, ChevronUpDownIcon, ChevronUpIcon, ChevronDownIcon, ArrowTopRightOnSquareIcon, CubeIcon } from '@heroicons/vue/24/outline'
 import { formatRelativeTime } from '@/composables/useFormat'
 import { useStore } from '@/composables/useStore'
 import type { LatestExtension, ExtensionMeta, BuildResult } from '@/types'
+
+interface HistoryDataPoint {
+  snapshot_id: string
+  trigger: string
+  timestamp: string
+  php_version: string
+  success_rate: number
+  pass: number
+  fail: number
+  total: number
+  platforms: PlatformBreakdown[]
+}
+
+interface PlatformBreakdown {
+  platform: string
+  version: string
+  x86_64: 'success' | 'failure'
+  aarch64: 'success' | 'failure'
+}
+
+// Pre-processed history file format
+interface PhpVersionStats {
+  pass: number
+  fail: number
+  total: number
+  success_rate: number
+}
+
+interface HistorySnapshot {
+  id: string
+  date: string
+  trigger: string
+  php_versions: Record<string, PhpVersionStats>
+  platforms: Record<string, PlatformBreakdown[]>
+}
+
+interface HistoryFile {
+  extension: string
+  version: string
+  snapshots: HistorySnapshot[]
+}
 
 const props = defineProps<{
   show: boolean
@@ -19,7 +60,67 @@ const emit = defineEmits<{
 const { loadBuilds } = useStore()
 const builds = ref<BuildResult[]>([])
 const loadingBuilds = ref(false)
+const loadingHistory = ref(false)
 const activeTab = ref<'overview' | 'builds' | 'history'>('overview')
+
+// History data
+const historyData = ref<HistoryDataPoint[]>([])
+const selectedHistoryPoint = ref<HistoryDataPoint | null>(null)
+const hoveredPoint = ref<{ php: string; index: number } | null>(null)
+const hiddenPhpVersions = ref<Set<string>>(new Set())
+
+function togglePhpVersion(phpVersion: string) {
+  if (hiddenPhpVersions.value.has(phpVersion)) {
+    hiddenPhpVersions.value.delete(phpVersion)
+  } else {
+    hiddenPhpVersions.value.add(phpVersion)
+  }
+  hiddenPhpVersions.value = new Set(hiddenPhpVersions.value) // trigger reactivity
+}
+
+// Debounce hover to reduce re-renders
+let hoverTimeout: ReturnType<typeof setTimeout> | null = null
+
+function handlePointHover(phpVersion: string, index: number) {
+  if (hoverTimeout) clearTimeout(hoverTimeout)
+  hoverTimeout = setTimeout(() => {
+    hoveredPoint.value = { php: phpVersion, index }
+  }, 50)
+}
+
+function handlePointLeave() {
+  if (hoverTimeout) clearTimeout(hoverTimeout)
+  hoveredPoint.value = null
+}
+
+// Smart tooltip positioning
+const tooltipWidth = 160
+const tooltipHeight = 90
+
+function getTooltipPosition(snapshotIndex: number, successRate: number) {
+  const x = getChartX(snapshotIndex)
+  const y = getChartY(successRate)
+  
+  // Horizontal positioning - check right overflow
+  const tooltipX = x + tooltipWidth + 10 > chartWidth.value
+    ? Math.max(padding.left, x - tooltipWidth - 10)  // Position to the left, but not beyond left padding
+    : x + 10  // Position to the right
+  
+  // Vertical positioning - always position above the point
+  // Clamp to stay within the SVG top boundary
+  const tooltipY = Math.max(padding.top, y - tooltipHeight - 10)
+  
+  return { x: tooltipX, y: tooltipY }
+}
+
+// Computed tooltip position for hovered point
+const hoveredTooltipPosition = computed(() => {
+  if (!hoveredPoint.value) return { x: 0, y: 0 }
+  const point = historyByPhp.value.get(hoveredPoint.value.php)?.[hoveredPoint.value.index]
+  if (!point) return { x: 0, y: 0 }
+  const snapshotIndex = allSnapshots.value.findIndex(s => s.id === point.snapshot_id)
+  return getTooltipPosition(snapshotIndex, point.success_rate)
+})
 
 // Build table sorting
 type BuildSortField = 'platform' | 'php_version' | 'arch' | 'status'
@@ -67,6 +168,170 @@ const sortedBuilds = computed(() => {
 
 const failedCount = computed(() => builds.value.filter(b => b.status === 'failure').length)
 
+// Load pre-processed history data
+async function loadHistoryData(extensionPath: string, extensionVersion: string): Promise<HistoryDataPoint[]> {
+  try {
+    // Extract extension name from path like "history/2026/01/23/xhprof-2.3.10-21286133725.json"
+    const filename = extensionPath.split('/').pop() || ''
+    const extensionName = filename.split('-')[0] // Get "xhprof" from "xhprof-2.3.10-21286133725.json"
+    
+    const historyUrl = `/data/reports/${extensionName}/${extensionVersion}-history.json`
+    
+    const response = await fetch(historyUrl)
+    if (!response.ok) {
+      return []
+    }
+    
+    const historyFile: HistoryFile = await response.json()
+    
+    // Transform pre-processed data to chart format
+    const historyPoints: HistoryDataPoint[] = []
+    
+    historyFile.snapshots.forEach(snapshot => {
+      Object.entries(snapshot.php_versions).forEach(([phpVersion, stats]) => {
+        historyPoints.push({
+          snapshot_id: snapshot.id,
+          trigger: snapshot.trigger,
+          timestamp: new Date(snapshot.date).toISOString(),
+          php_version: phpVersion,
+          success_rate: stats.success_rate,
+          pass: stats.pass,
+          fail: stats.fail,
+          total: stats.total,
+          platforms: snapshot.platforms[phpVersion] || []
+        })
+      })
+    })
+    
+    return historyPoints.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  } catch (err) {
+    console.error('[History] Failed to load history data:', err)
+    return []
+  }
+}
+
+// Get unique snapshots
+const allSnapshots = computed(() => {
+  const snapshots = new Map<string, { id: string; trigger: string; timestamp: string }>()
+  
+  historyData.value.forEach(point => {
+    if (!snapshots.has(point.snapshot_id)) {
+      snapshots.set(point.snapshot_id, {
+        id: point.snapshot_id,
+        trigger: point.trigger,
+        timestamp: point.timestamp
+      })
+    }
+  })
+  
+  return Array.from(snapshots.values()).sort((a, b) => 
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  )
+})
+
+// Group history by PHP version
+const historyByPhp = computed(() => {
+  const grouped = new Map<string, HistoryDataPoint[]>()
+  
+  historyData.value.forEach(point => {
+    if (!grouped.has(point.php_version)) {
+      grouped.set(point.php_version, [])
+    }
+    grouped.get(point.php_version)!.push(point)
+  })
+  
+  // Sort each group by timestamp
+  grouped.forEach((points) => {
+    points.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  })
+  
+  return grouped
+})
+
+// Chart dimensions and scales
+const chartWidth = ref(600)
+const chartHeight = ref(300)
+const padding = { top: 20, right: 20, bottom: 40, left: 50 }
+const plotWidth = computed(() => chartWidth.value - padding.left - padding.right)
+const plotHeight = computed(() => chartHeight.value - padding.top - padding.bottom)
+
+const phpVersionColors: Record<string, string> = {
+  '8.1': '#22c55e',
+  '8.2': '#3b82f6',
+  '8.3': '#a855f7',
+  '8.4': '#f59e0b',
+  '8.5': '#ec4899',
+  'next': '#6366f1'
+}
+
+// Pre-calculate chart paths to avoid recalculation
+const chartPaths = computed(() => {
+  const paths = new Map<string, string>()
+  
+  historyByPhp.value.forEach((points, phpVersion) => {
+    if (points.length === 0) {
+      paths.set(phpVersion, '')
+      return
+    }
+    
+    const pathData = points.map((point, idx) => {
+      const snapshotIndex = allSnapshots.value.findIndex(s => s.id === point.snapshot_id)
+      const x = getChartX(snapshotIndex)
+      const y = getChartY(point.success_rate)
+      return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`
+    }).join(' ')
+    
+    paths.set(phpVersion, pathData)
+  })
+  
+  return paths
+})
+
+function getChartX(snapshotIndex: number): number {
+  if (allSnapshots.value.length <= 1) return padding.left
+  return padding.left + (snapshotIndex / (allSnapshots.value.length - 1)) * plotWidth.value
+}
+
+function getChartY(successRate: number): number {
+  return padding.top + ((100 - successRate) / 100) * plotHeight.value
+}
+
+function getPathForPhpVersion(phpVersion: string): string {
+  return chartPaths.value.get(phpVersion) || ''
+}
+
+function formatTrigger(trigger: string, short: boolean = false): string {
+  if (short) {
+    // Abbreviate for chart labels
+    if (trigger.includes('Extension')) return trigger.split(' ')[1]
+    if (trigger.includes('PHP')) return trigger.split(' ')[1]
+    if (trigger.includes('Alpine')) return 'Alpine'
+    if (trigger.includes('Ubuntu')) return 'Ubuntu'
+    if (trigger.includes('Debian')) return 'Debian'
+  }
+  return trigger
+}
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function handlePointClick(phpVersion: string, snapshotIndex: number) {
+  const snapshot = allSnapshots.value[snapshotIndex]
+  const point = historyData.value.find(p => p.php_version === phpVersion && p.snapshot_id === snapshot.id)
+  selectedHistoryPoint.value = point || null
+}
+
+function getPlatformStatus(platform: PlatformBreakdown): 'full' | 'partial' | 'fail' {
+  const x86 = platform.x86_64 === 'success'
+  const arm = platform.aarch64 === 'success'
+  
+  if (x86 && arm) return 'full'
+  if (!x86 && !arm) return 'fail'
+  return 'partial'
+}
+
 const successRate = computed(() => {
   if (!props.extensionData || props.extensionData.total === 0) return 0
   return Math.round((props.extensionData.pass / props.extensionData.total) * 100)
@@ -100,9 +365,17 @@ const rateStrokeColor = computed(() => {
 watch(() => props.show, async (show) => {
   if (show && props.extensionData?.path) {
     loadingBuilds.value = true
+    loadingHistory.value = true
     activeTab.value = 'overview'
     buildSortField.value = 'platform'
     buildSortDir.value = 'asc'
+    selectedHistoryPoint.value = null
+    hoveredPoint.value = null
+    
+    // Load real history data
+    historyData.value = await loadHistoryData(props.extensionData.path, props.extensionData.version)
+    loadingHistory.value = false
+    
     try {
       builds.value = await loadBuilds(props.extensionData.path)
     } finally {
@@ -123,6 +396,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  if (hoverTimeout) clearTimeout(hoverTimeout)
 })
 </script>
 
@@ -430,14 +704,198 @@ onUnmounted(() => {
             </div>
 
             <!-- History Tab -->
-            <div v-else-if="activeTab === 'history'" class="h-full flex flex-col items-center justify-center p-6 text-center">
-              <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                <ClockIcon class="w-8 h-8 text-gray-400" />
+            <div v-else-if="activeTab === 'history'" class="p-4 sm:p-6 space-y-6">
+              <!-- Loading state -->
+              <div v-if="loadingHistory" class="flex items-center justify-center py-12">
+                <div class="spinner"></div>
               </div>
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Build History</h3>
-              <p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
-                Historical build data is not yet available. Check back later to see trends and improvements over time.
-              </p>
+
+              <!-- Empty state -->
+              <div v-else-if="allSnapshots.length === 0" class="flex flex-col items-center justify-center py-12 text-center">
+                <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                  <CubeIcon class="w-8 h-8 text-gray-400" />
+                </div>
+                <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No Build History</h4>
+                <p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
+                  Build history is not available.<br>
+                  Please try again later.
+                </p>
+              </div>
+
+              <template v-else>
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Success Rate Trends</h3>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">Build history across PHP versions ({{ allSnapshots.length }} builds)</p>
+                </div>
+
+                <!-- Chart -->
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                <svg :width="chartWidth" :height="chartHeight" class="w-full max-w-full">
+                  <!-- Grid lines -->
+                  <g class="grid">
+                    <line
+                      v-for="y in [0, 25, 50, 75, 100]"
+                      :key="y"
+                      :x1="padding.left"
+                      :y1="getChartY(y)"
+                      :x2="chartWidth - padding.right"
+                      :y2="getChartY(y)"
+                      class="stroke-gray-300 dark:stroke-gray-600"
+                      stroke-width="1"
+                      stroke-dasharray="2,2"
+                    />
+                  </g>
+
+                  <!-- Y-axis labels -->
+                  <g class="y-axis">
+                    <text
+                      v-for="y in [0, 25, 50, 75, 100]"
+                      :key="y"
+                      :x="padding.left - 10"
+                      :y="getChartY(y)"
+                      text-anchor="end"
+                      dominant-baseline="middle"
+                      class="text-xs fill-gray-500 dark:fill-gray-400"
+                    >
+                      {{ y }}%
+                    </text>
+                  </g>
+
+                  <!-- X-axis labels (show every few snapshots) -->
+                  <g class="x-axis">
+                    <text
+                      v-for="(snapshot, idx) in allSnapshots.filter((_, i) => i % Math.ceil(allSnapshots.length / 6) === 0 || i === allSnapshots.length - 1)"
+                      :key="snapshot.id"
+                      :x="getChartX(allSnapshots.indexOf(snapshot))"
+                      :y="chartHeight - padding.bottom + 20"
+                      :text-anchor="allSnapshots.indexOf(snapshot) === allSnapshots.length - 1 ? 'end' : (allSnapshots.indexOf(snapshot) === 0 ? 'start' : 'middle')"
+                      class="text-xs fill-gray-500 dark:fill-gray-400"
+                    >
+                      {{ formatDate(snapshot.timestamp) }}
+                    </text>
+                  </g>
+
+                  <!-- Lines for each PHP version -->
+                  <g v-for="phpVersion in Array.from(historyByPhp.keys())" :key="phpVersion" v-show="!hiddenPhpVersions.has(phpVersion)">
+                    <path
+                      :d="getPathForPhpVersion(phpVersion)"
+                      :stroke="phpVersionColors[phpVersion]"
+                      stroke-width="2.5"
+                      fill="none"
+                      class="transition-all"
+                      :class="hoveredPoint && hoveredPoint.php !== phpVersion ? 'opacity-30' : 'opacity-100'"
+                    />
+                    
+                    <!-- Data points -->
+                    <circle
+                      v-for="(point, idx) in historyByPhp.get(phpVersion) || []"
+                      :key="`${phpVersion}-${point.snapshot_id}`"
+                      :cx="getChartX(allSnapshots.findIndex(s => s.id === point.snapshot_id))"
+                      :cy="getChartY(point.success_rate)"
+                      r="4"
+                      :fill="phpVersionColors[phpVersion]"
+                      class="cursor-pointer transition-all hover:r-6"
+                      @mouseenter="handlePointHover(phpVersion, idx)"
+                      @mouseleave="handlePointLeave"
+                      @click="handlePointClick(phpVersion, allSnapshots.findIndex(s => s.id === point.snapshot_id))"
+                    />
+                  </g>
+
+                  <!-- Hover tooltip -->
+                  <g v-if="hoveredPoint && !hiddenPhpVersions.has(hoveredPoint.php) && historyByPhp.get(hoveredPoint.php)?.[hoveredPoint.index]" class="pointer-events-none">
+                    <foreignObject
+                      :x="hoveredTooltipPosition.x"
+                      :y="hoveredTooltipPosition.y"
+                      :width="tooltipWidth"
+                      :height="tooltipHeight"
+                    >
+                      <div class="bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg p-2 shadow-lg">
+                        <div class="font-semibold">PHP {{ hoveredPoint.php }}</div>
+                        <div class="text-gray-300 mb-1">{{ formatDate(historyByPhp.get(hoveredPoint.php)![hoveredPoint.index]?.timestamp || '') }}</div>
+                        <div class="font-bold text-sm">{{ historyByPhp.get(hoveredPoint.php)![hoveredPoint.index]?.success_rate }}%</div>
+                        <div class="text-gray-300">{{ historyByPhp.get(hoveredPoint.php)![hoveredPoint.index]?.pass }}/{{ historyByPhp.get(hoveredPoint.php)![hoveredPoint.index]?.total }} passing</div>
+                      </div>
+                    </foreignObject>
+                  </g>
+                </svg>
+              </div>
+
+              <!-- Legend -->
+              <div class="flex flex-wrap gap-4 justify-center">
+                <button
+                  v-for="phpVersion in Array.from(historyByPhp.keys())"
+                  :key="phpVersion"
+                  @click="togglePhpVersion(phpVersion)"
+                  class="flex items-center gap-2 px-2 py-1 rounded-md transition-all hover:bg-gray-100 dark:hover:bg-gray-700"
+                  :class="hiddenPhpVersions.has(phpVersion) ? 'opacity-40' : 'opacity-100'"
+                >
+                  <div class="w-8 h-0.5 rounded" :style="{ backgroundColor: phpVersionColors[phpVersion] }"></div>
+                  <span class="text-sm text-gray-700 dark:text-gray-300">
+                    PHP {{ phpVersion }}
+                    <span class="text-gray-500 dark:text-gray-400">
+                      ({{ historyByPhp.get(phpVersion)?.[historyByPhp.get(phpVersion)!.length - 1]?.pass }}/{{ historyByPhp.get(phpVersion)?.[historyByPhp.get(phpVersion)!.length - 1]?.total }})
+                    </span>
+                  </span>
+                </button>
+              </div>
+
+              <!-- Selected point breakdown -->
+              <div v-if="selectedHistoryPoint" class="border-t border-gray-200 dark:border-gray-700 pt-6 mt-6">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      PHP {{ selectedHistoryPoint.php_version }} - {{ selectedHistoryPoint.trigger }}
+                    </h4>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ formatDate(selectedHistoryPoint.timestamp) }} • {{ selectedHistoryPoint.pass }}/{{ selectedHistoryPoint.total }} passing ({{ selectedHistoryPoint.success_rate }}%)
+                    </p>
+                  </div>
+                  <button
+                    @click="selectedHistoryPoint = null"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <XMarkIcon class="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div class="space-y-3">
+                  <div
+                    v-for="platform in selectedHistoryPoint.platforms"
+                    :key="`${platform.platform}-${platform.version}`"
+                    class="flex items-center gap-3"
+                  >
+                    <div class="text-sm text-gray-700 dark:text-gray-300 w-32">
+                      {{ platform.platform }} {{ platform.version }}
+                    </div>
+                    <div class="flex gap-1">
+                      <div
+                        v-for="arch in ['x86_64', 'aarch64']"
+                        :key="arch"
+                        :class="[
+                          'w-6 h-6 rounded flex items-center justify-center text-xs font-bold',
+                          platform[arch as keyof PlatformBreakdown] === 'success'
+                            ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400'
+                            : 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
+                        ]"
+                        :title="arch"
+                      >
+                        {{ arch === 'x86_64' ? 'x64' : 'arm' }}
+                      </div>
+                    </div>
+                    <div class="flex-1 flex gap-0.5">
+                      <div
+                        :class="[
+                          'h-2 rounded-full flex-1',
+                          getPlatformStatus(platform) === 'full' ? 'bg-green-500' :
+                          getPlatformStatus(platform) === 'partial' ? 'bg-yellow-500' :
+                          'bg-red-500'
+                        ]"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              </template>
             </div>
           </div>
         </div>
