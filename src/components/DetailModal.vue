@@ -300,18 +300,6 @@ function getPathForPhpVersion(phpVersion: string): string {
   return chartPaths.value.get(phpVersion) || ''
 }
 
-function formatTrigger(trigger: string, short: boolean = false): string {
-  if (short) {
-    // Abbreviate for chart labels
-    if (trigger.includes('Extension')) return trigger.split(' ')[1]
-    if (trigger.includes('PHP')) return trigger.split(' ')[1]
-    if (trigger.includes('Alpine')) return 'Alpine'
-    if (trigger.includes('Ubuntu')) return 'Ubuntu'
-    if (trigger.includes('Debian')) return 'Debian'
-  }
-  return trigger
-}
-
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -764,7 +752,7 @@ onUnmounted(() => {
                   <!-- X-axis labels (show every few snapshots) -->
                   <g class="x-axis">
                     <text
-                      v-for="(snapshot, idx) in allSnapshots.filter((_, i) => i % Math.ceil(allSnapshots.length / 6) === 0 || i === allSnapshots.length - 1)"
+                      v-for="snapshot in allSnapshots.filter((_, i) => i % Math.ceil(allSnapshots.length / 6) === 0 || i === allSnapshots.length - 1)"
                       :key="snapshot.id"
                       :x="getChartX(allSnapshots.indexOf(snapshot))"
                       :y="chartHeight - padding.bottom + 20"

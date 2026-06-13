@@ -14,7 +14,7 @@ import { useDataLoader } from './composables/useDataLoader'
 import { useStore } from './composables/useStore'
 import { useKeyboard } from './composables/useKeyboard'
 import { useDebounce } from './composables/useDebounce'
-import type { Filters } from './types'
+import type { Filters, LatestExtension } from './types'
 
 const { metadata, latest, loading, error, initialize } = useDataLoader()
 const { state, buildCacheVersion, setFilter, clearFilters, setView, setSelectedExtension, loadBuilds, processExtensions, filterExtensions, getStats, needsBuildsLoaded, initializeFilters } = useStore()
@@ -22,6 +22,10 @@ const { state, buildCacheVersion, setFilter, clearFilters, setView, setSelectedE
 const showMobileSidebar = ref(false)
 const highlightedIndex = ref(-1)
 const mainContentRef = ref<HTMLElement | null>(null)
+
+function isLatestExtension(value: unknown): value is LatestExtension {
+  return !!value && typeof value === 'object' && 'path' in value
+}
 
 const extensions = computed(() => {
   // Trigger reactivity when builds are loaded
@@ -52,9 +56,10 @@ const lastUpdated = computed(() => {
 
 const stats = computed(() => getStats(extensions.value))
 
-const selectedExtensionData = computed(() => {
+const selectedExtensionData = computed<LatestExtension | null>(() => {
   if (!state.selectedExtension || !latest.value) return null
-  return latest.value[state.selectedExtension] || null
+  const extension = latest.value[state.selectedExtension]
+  return isLatestExtension(extension) ? extension : null
 })
 
 const selectedExtensionMeta = computed(() => {
@@ -76,7 +81,7 @@ watch(
     if (!needsBuilds || !latest.value) return
     
     // Load builds for all extensions
-    const paths = Object.values(latest.value).map(ext => ext.path)
+    const paths = Object.values(latest.value).filter(isLatestExtension).map(ext => ext.path)
     await Promise.all(paths.map(path => loadBuilds(path)))
   },
   { deep: true }
