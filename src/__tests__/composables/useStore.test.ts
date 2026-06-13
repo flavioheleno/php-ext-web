@@ -110,6 +110,30 @@ describe('useStore', () => {
       expect(result[0].successRate).toBe(75)
     })
 
+    it('uses provided success rate when available', () => {
+      const { processExtensions } = useStore()
+
+      const latest = {
+        cached: { version: '1.0.0', pass: 1, fail: 1, total: 2, success_rate: 63, path: 'cached/1.0.0.json', updated_at: '2024-01-01' },
+      }
+
+      const result = processExtensions(latest)
+      expect(result[0].successRate).toBe(63)
+    })
+
+    it('skips latest metadata entries', () => {
+      const { processExtensions } = useStore()
+
+      const latest = {
+        _meta: { latest_updated_at: '2024-01-02', processed_at: '2024-01-02' },
+        redis: { version: '6.0.0', pass: 8, fail: 2, total: 10, path: 'redis/6.0.0.json', updated_at: '2024-01-01' },
+      }
+
+      const result = processExtensions(latest)
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('redis')
+    })
+
     it('handles zero total builds', () => {
       const { processExtensions } = useStore()
       
@@ -169,6 +193,22 @@ describe('useStore', () => {
       expect(result).toHaveLength(1)
       expect(result[0].name).toBe('failing')
     })
+
+    it('filters successful extensions when no detail filters', () => {
+      const { filterExtensions, setFilter, clearFilters } = useStore()
+      clearFilters()
+
+      const extensions: ProcessedExtension[] = [
+        { name: 'passing', version: '1.0.0', pass: 10, fail: 0, total: 10, successRate: 100, path: '', updated_at: '' },
+        { name: 'failing', version: '1.0.0', pass: 5, fail: 5, total: 10, successRate: 50, path: '', updated_at: '' },
+      ]
+
+      setFilter('status', 'success')
+      const result = filterExtensions(extensions)
+
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('passing')
+    })
   })
 
   describe('filterBuilds', () => {
@@ -219,6 +259,17 @@ describe('useStore', () => {
       
       expect(result).toHaveLength(1)
       expect(result[0].status).toBe('success')
+    })
+
+    it('filters by failure status', () => {
+      const { filterBuilds, setFilter, clearFilters } = useStore()
+      clearFilters()
+
+      setFilter('status', 'failure')
+      const result = filterBuilds(mockBuilds)
+
+      expect(result).toHaveLength(1)
+      expect(result[0].status).toBe('failure')
     })
 
     it('returns all builds when no filters applied', () => {
@@ -324,6 +375,32 @@ describe('useStore', () => {
       expect(vi.mocked(fetch).mock.calls.length).toBe(fetchCount)
     })
 
+    it('waits for an in-flight build load for the same path', async () => {
+      vi.useFakeTimers()
+      const mockBuilds = [{ status: 'success' }]
+      let resolveFetch: ((value: Response) => void) | undefined
+      vi.mocked(fetch).mockReturnValue(new Promise<Response>((resolve) => {
+        resolveFetch = resolve
+      }))
+
+      const { loadBuilds } = useStore()
+
+      const firstLoad = loadBuilds('redis/in-flight.json')
+      const secondLoad = loadBuilds('redis/in-flight.json')
+
+      resolveFetch?.({
+        ok: true,
+        json: () => Promise.resolve(mockBuilds),
+      } as Response)
+
+      await firstLoad
+      await vi.runOnlyPendingTimersAsync()
+
+      await expect(secondLoad).resolves.toEqual(mockBuilds)
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+      vi.useRealTimers()
+    })
+
     it('returns empty array on fetch error', async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
@@ -414,6 +491,80 @@ describe('useStore', () => {
       const result = filterExtensions(extensions)
       expect(result.length).toBe(1)
       expect(result[0].total).toBe(1) // Only one build matches arm64
+    })
+  })
+
+  describe('initializeFilters', () => {
+    const metadata = {
+      osVersions: {
+        alpine: { versions: ['3.19', '3.20'] },
+        debian: { versions: ['bookworm'] },
+      },
+      phpVersions: {
+        '8.3': { tag: '8.3.0', branch: 'PHP-8.3' },
+        next: { tag: null, branch: 'master' },
+        '8.2': { tag: '8.2.0', branch: 'PHP-8.2' },
+      },
+      architectures: ['amd64', 'arm64'],
+      extensions: {},
+    }
+
+    it('initializes all selectable filters and sorts PHP next last', () => {
+      const { state, initializeFilters, clearFilters } = useStore()
+      clearFilters()
+
+      initializeFilters(metadata)
+
+      expect(state.filters.os).toEqual(['alpine|3.19', 'alpine|3.20', 'debian|bookworm'])
+      expect(state.filters.phpVersion).toEqual(['8.2', '8.3', 'next'])
+      expect(state.filters.arch).toEqual(['amd64', 'arm64'])
+    })
+
+    it('uses selected-all filters as no detail filtering', () => {
+      const { filterExtensions, initializeFilters, clearFilters } = useStore()
+      clearFilters()
+      initializeFilters(metadata)
+
+      const extensions: ProcessedExtension[] = [
+        { name: 'redis', version: '6.0.0', pass: 2, fail: 0, total: 2, successRate: 100, path: '', updated_at: '', builds: [] },
+      ]
+
+      expect(filterExtensions(extensions)).toHaveLength(1)
+    })
+  })
+
+  describe('URL state', () => {
+    it('loads filters, view, and selected extension from the URL', async () => {
+      vi.resetModules()
+      window.history.replaceState({}, '', '/?q=redis&os=alpine|3.19&php=8.3&arch=amd64&ext=redis&status=success&view=grid&detail=redis')
+
+      const { useStore: useFreshStore } = await import('@/composables/useStore')
+      const { state } = useFreshStore()
+
+      expect(state.filters.search).toBe('redis')
+      expect(state.filters.os).toEqual(['alpine|3.19'])
+      expect(state.filters.phpVersion).toEqual(['8.3'])
+      expect(state.filters.arch).toEqual(['amd64'])
+      expect(state.filters.extension).toEqual(['redis'])
+      expect(state.filters.status).toBe('success')
+      expect(state.currentView).toBe('grid')
+      expect(state.selectedExtension).toBe('redis')
+    })
+
+    it('syncs non-default view and detail state to the URL', async () => {
+      vi.resetModules()
+      window.history.replaceState({}, '', '/')
+
+      const { nextTick } = await import('vue')
+      const { useStore: useFreshStore } = await import('@/composables/useStore')
+      const { setView, setSelectedExtension } = useFreshStore()
+
+      setView('grid')
+      setSelectedExtension('redis')
+      await nextTick()
+
+      expect(window.location.search).toContain('view=grid')
+      expect(window.location.search).toContain('detail=redis')
     })
   })
 })
