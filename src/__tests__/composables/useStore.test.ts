@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { computed } from 'vue'
 import { useStore } from '@/composables/useStore'
 import type { ProcessedExtension, BuildResult } from '@/types'
 
@@ -357,6 +358,22 @@ describe('useStore', () => {
       
       expect(result).toEqual(mockBuilds)
       expect(buildCache.value.has('redis/6.0.0.json')).toBe(true)
+    })
+
+    it('updates a computed over processExtensions when builds load', async () => {
+      const mockBuilds = [{ status: 'success' }]
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockBuilds),
+      } as Response)
+
+      const { loadBuilds, processExtensions } = useStore()
+      const latest = { redis: { version: '6.0.0', pass: 1, fail: 0, total: 1, path: 'redis/reactive.json', updated_at: '2024-01-01' } }
+      const builds = computed(() => processExtensions(latest as never)[0].builds)
+
+      expect(builds.value).toBeUndefined()
+      await loadBuilds('redis/reactive.json')
+      expect(builds.value).toEqual(mockBuilds)
     })
 
     it('returns cached builds on subsequent calls', async () => {

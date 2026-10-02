@@ -25,8 +25,6 @@ const state = reactive({
 // Cache for loaded build reports
 const buildCache = ref<Map<string, BuildResult[]>>(new Map())
 const loadingBuilds = ref<Set<string>>(new Set())
-// Counter to trigger reactivity when builds are loaded
-const buildCacheVersion = ref(0)
 
 // Sync state to URL
 function syncToUrl() {
@@ -122,7 +120,6 @@ export function useStore() {
       if (!response.ok) throw new Error('Failed to load builds')
       const builds = await response.json()
       buildCache.value.set(path, builds)
-      buildCacheVersion.value++ // Trigger reactivity
       return builds
     } catch {
       return []
@@ -313,7 +310,6 @@ export function useStore() {
   return {
     state,
     buildCache,
-    buildCacheVersion,
     setFilter,
     clearFilters,
     setView,
