@@ -32,7 +32,7 @@ describe('useKeyboard', () => {
   function createKeyEvent(key: string, target?: Partial<HTMLElement>): KeyboardEvent {
     const event = new KeyboardEvent('keydown', { key, bubbles: true })
     Object.defineProperty(event, 'target', {
-      value: target || { tagName: 'DIV', isContentEditable: false },
+      value: target || document.createElement('div'),
       writable: false,
     })
     Object.defineProperty(event, 'preventDefault', {
@@ -109,7 +109,7 @@ describe('useKeyboard', () => {
     const onNext = vi.fn()
     mountWithKeyboard({ onSearch, onNext })
     
-    const event = createKeyEvent('/', { tagName: 'INPUT', isContentEditable: false } as HTMLElement)
+    const event = createKeyEvent('/', document.createElement('input'))
     keydownHandler(event)
     
     expect(onSearch).not.toHaveBeenCalled()
@@ -119,7 +119,7 @@ describe('useKeyboard', () => {
     const onSearch = vi.fn()
     mountWithKeyboard({ onSearch })
     
-    const event = createKeyEvent('/', { tagName: 'TEXTAREA', isContentEditable: false } as HTMLElement)
+    const event = createKeyEvent('/', document.createElement('textarea'))
     keydownHandler(event)
     
     expect(onSearch).not.toHaveBeenCalled()
@@ -129,7 +129,9 @@ describe('useKeyboard', () => {
     const onSearch = vi.fn()
     mountWithKeyboard({ onSearch })
     
-    const event = createKeyEvent('/', { tagName: 'DIV', isContentEditable: true } as HTMLElement)
+    const target = document.createElement('div')
+    Object.defineProperty(target, 'isContentEditable', { value: true })
+    const event = createKeyEvent('/', target)
     keydownHandler(event)
     
     expect(onSearch).not.toHaveBeenCalled()
@@ -139,12 +141,26 @@ describe('useKeyboard', () => {
     const onEscape = vi.fn()
     mountWithKeyboard({ onEscape })
     
-    const blur = vi.fn()
-    const target = { tagName: 'INPUT', isContentEditable: false, blur } as unknown as HTMLInputElement
+    const target = document.createElement('input')
+    const blur = vi.spyOn(target, 'blur')
     const event = createKeyEvent('Escape', target)
     keydownHandler(event)
     
     expect(blur).toHaveBeenCalled()
     expect(onEscape).toHaveBeenCalled()
+  })
+
+  it('leaves native buttons and dialog controls to their own keyboard handlers', () => {
+    const onEnter = vi.fn()
+    const onNext = vi.fn()
+    mountWithKeyboard({ onEnter, onNext })
+    keydownHandler(createKeyEvent('Enter', document.createElement('button')))
+    const dialog = document.createElement('dialog')
+    dialog.setAttribute('open', '')
+    const button = document.createElement('button')
+    dialog.append(button)
+    keydownHandler(createKeyEvent('j', button))
+    expect(onEnter).not.toHaveBeenCalled()
+    expect(onNext).not.toHaveBeenCalled()
   })
 })

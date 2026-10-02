@@ -11,7 +11,8 @@ interface KeyboardOptions {
 export function useKeyboard(options: KeyboardOptions) {
   function handleKeydown(e: KeyboardEvent) {
     // Ignore if typing in an input
-    const target = e.target as HTMLElement
+    const target = e.target instanceof HTMLElement ? e.target : document.body
+    if (target.closest('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
       if (e.key === 'Escape' && options.onEscape) {
         (target as HTMLInputElement).blur()
@@ -35,6 +36,7 @@ export function useKeyboard(options: KeyboardOptions) {
         options.onPrev?.()
         break
       case 'Enter':
+        if (target.closest('button, a, select')) return
         options.onEnter?.()
         break
     }

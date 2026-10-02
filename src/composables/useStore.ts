@@ -1,98 +1,70 @@
 import { reactive, ref, watch } from 'vue'
 import type { Filters, LatestData, LatestExtension, ProcessedExtension, BuildResult, Metadata } from '@/types'
 
-// Track if filters have been initialized with defaults
-let filtersInitialized = false
-
-// Track total counts of each filter type for "all selected" detection
-let totalOsCount = 0
-let totalPhpCount = 0
-let totalArchCount = 0
-
 const state = reactive({
   filters: {
-    os: [] as string[],
-    phpVersion: [] as string[],
-    arch: [] as string[],
-    extension: [] as string[],
-    status: 'all' as 'all' | 'success' | 'failure',
-    search: '',
+    os: [], phpVersion: [], arch: [], extension: [], status: 'all', search: '',
   } as Filters,
   currentView: 'list' as 'grid' | 'list',
   selectedExtension: null as string | null,
 })
 
-// Cache for loaded build reports
-const buildCache = ref<Map<string, BuildResult[]>>(new Map())
-const loadingBuilds = ref<Set<string>>(new Set())
-// Counter to trigger reactivity when builds are loaded
+const buildCache = ref(new Map<string, BuildResult[]>())
 const buildCacheVersion = ref(0)
+const pendingBuilds = new Map<string, Promise<BuildResult[]>>()
+const filterParams = { os: 'os', phpVersion: 'php', arch: 'arch', extension: 'ext' } as const
+let filterOptions: Partial<Record<keyof typeof filterParams, string[]>> = {}
 
-// Sync state to URL
 function syncToUrl() {
   const params = new URLSearchParams()
-  
+  for (const [key, param] of Object.entries(filterParams)) {
+    const values = state.filters[key as keyof typeof filterParams]
+    if (values === null) params.set(param, '')
+    else if (values.length) params.set(param, values.join(','))
+  }
   if (state.filters.search) params.set('q', state.filters.search)
-  if (state.filters.os.length) params.set('os', state.filters.os.join(','))
-  if (state.filters.phpVersion.length) params.set('php', state.filters.phpVersion.join(','))
-  if (state.filters.arch.length) params.set('arch', state.filters.arch.join(','))
-  if (state.filters.extension.length) params.set('ext', state.filters.extension.join(','))
   if (state.filters.status !== 'all') params.set('status', state.filters.status)
   if (state.currentView !== 'list') params.set('view', state.currentView)
   if (state.selectedExtension) params.set('detail', state.selectedExtension)
-  
   const query = params.toString()
-  const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
-  window.history.replaceState({}, '', newUrl)
+  window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
 }
 
-// Load state from URL
 function loadFromUrl() {
   const params = new URLSearchParams(window.location.search)
-  
-  const search = params.get('q')
-  const os = params.get('os')
-  const php = params.get('php')
-  const arch = params.get('arch')
-  const ext = params.get('ext')
+  for (const [key, param] of Object.entries(filterParams)) {
+    if (params.has(param)) {
+      state.filters[key as keyof typeof filterParams] = params.get(param) ? params.get(param)!.split(',') : null
+    }
+  }
+  state.filters.search = params.get('q') || ''
   const status = params.get('status')
-  const view = params.get('view')
-  const detail = params.get('detail')
-  
-  if (search) state.filters.search = search
-  if (os) state.filters.os = os.split(',')
-  if (php) state.filters.phpVersion = php.split(',')
-  if (arch) state.filters.arch = arch.split(',')
-  if (ext) state.filters.extension = ext.split(',')
   if (status === 'success' || status === 'failure') state.filters.status = status
-  if (view === 'grid' || view === 'list') state.currentView = view
-  if (detail) state.selectedExtension = detail
+  if (params.get('view') === 'grid') state.currentView = 'grid'
+  state.selectedExtension = params.get('detail')
 }
 
-// Initialize from URL on load
 loadFromUrl()
+watch(() => [state.filters, state.currentView, state.selectedExtension], syncToUrl, { deep: true })
 
-// Watch for state changes and sync to URL
-watch(
-  () => [state.filters, state.currentView, state.selectedExtension],
-  () => syncToUrl(),
-  { deep: true }
-)
+export function filterBuilds(builds: BuildResult[], filters: Filters): BuildResult[] {
+  const matches = (values: string[] | null, value: string) =>
+    values !== null && (!values.length || values.includes(value))
+  return builds.filter(build => matches(filters.os, `${build.platform}|${build.platform_version}`)
+    && matches(filters.phpVersion, build.php_version) && matches(filters.arch, build.arch))
+}
 
 export function useStore() {
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
+    const options = filterOptions[key as keyof typeof filterParams]
     state.filters[key] = value
+    if (Array.isArray(value) && options?.length && options.every(option => value.includes(option))) {
+      state.filters[key as keyof typeof filterParams] = []
+    }
   }
 
   function clearFilters() {
-    state.filters = {
-      os: [],
-      phpVersion: [],
-      arch: [],
-      extension: [],
-      status: 'all',
-      search: '',
-    }
+    state.filters = { os: [], phpVersion: [], arch: [], extension: [], status: 'all', search: '' }
   }
 
   function setView(view: 'grid' | 'list') {
@@ -103,227 +75,94 @@ export function useStore() {
     state.selectedExtension = name
   }
 
-  async function loadBuilds(path: string): Promise<BuildResult[]> {
-    if (buildCache.value.has(path)) {
-      return buildCache.value.get(path)!
-    }
-    
-    if (loadingBuilds.value.has(path)) {
-      // Wait for existing load to complete
-      while (loadingBuilds.value.has(path)) {
-        await new Promise(resolve => setTimeout(resolve, 50))
+  function loadBuilds(path: string): Promise<BuildResult[]> {
+    const cached = buildCache.value.get(path)
+    if (cached) return Promise.resolve(cached)
+    const pending = pendingBuilds.get(path)
+    if (pending) return pending
+    const request = (async () => {
+      try {
+        const response = await fetch(`data/${path}`)
+        if (!response.ok) throw new Error(`Could not load build results (${response.status}). Try again.`)
+        const builds: BuildResult[] = await response.json()
+        buildCache.value.set(path, builds)
+        buildCacheVersion.value++
+        return builds
+      } finally {
+        pendingBuilds.delete(path)
       }
-      return buildCache.value.get(path) || []
-    }
-    
-    loadingBuilds.value.add(path)
-    try {
-      const response = await fetch(`/data/${path}`)
-      if (!response.ok) throw new Error('Failed to load builds')
-      const builds = await response.json()
-      buildCache.value.set(path, builds)
-      buildCacheVersion.value++ // Trigger reactivity
-      return builds
-    } catch {
-      return []
-    } finally {
-      loadingBuilds.value.delete(path)
-    }
+    })()
+    pendingBuilds.set(path, request)
+    return request
   }
 
   function processExtensions(latest: LatestData | null, _extensions: Record<string, unknown> = {}): ProcessedExtension[] {
     if (!latest) return []
-
-    return Object.entries(latest)
-      .filter(([name]) => name !== '_meta')
-      .map(([name, data]) => {
-        const ext = data as LatestExtension
-        return {
-          name,
-          version: ext.version,
-          updated_at: ext.updated_at,
-          pass: ext.pass,
-          fail: ext.fail,
-          total: ext.total,
-          successRate: ext.success_rate ?? (ext.total > 0 ? Math.round((ext.pass / ext.total) * 100) : 0),
-          path: ext.path,
-          builds: buildCache.value.get(ext.path),
-        }
-      })
-  }
-
-  function filterBuilds(builds: BuildResult[]): BuildResult[] {
-    return builds.filter((build) => {
-      // OS filter (format: "platform|platform_version")
-      if (state.filters.os.length > 0) {
-        const osKey = `${build.platform}|${build.platform_version}`
-        if (!state.filters.os.includes(osKey)) {
-          return false
-        }
+    return Object.entries(latest).filter(([name]) => name !== '_meta').map(([name, data]) => {
+      const ext = data as LatestExtension
+      return {
+        name, version: ext.version, updated_at: ext.updated_at,
+        pass: ext.pass, fail: ext.fail, total: ext.total, path: ext.path,
+        successRate: ext.success_rate ?? (ext.total ? Math.round(ext.pass / ext.total * 100) : 0),
+        builds: buildCache.value.get(ext.path),
       }
-      
-      // PHP version filter
-      if (state.filters.phpVersion.length > 0) {
-        if (!state.filters.phpVersion.includes(build.php_version)) {
-          return false
-        }
-      }
-      
-      // Architecture filter
-      if (state.filters.arch.length > 0) {
-        if (!state.filters.arch.includes(build.arch)) {
-          return false
-        }
-      }
-      
-      // Status filter
-      if (state.filters.status === 'success' && build.status !== 'success') {
-        return false
-      }
-      if (state.filters.status === 'failure' && build.status !== 'failure') {
-        return false
-      }
-      
-      return true
     })
   }
 
-  function filterExtensions(extensions: ProcessedExtension[]): ProcessedExtension[] {
-    // Check if all filters are selected (equivalent to no filtering)
-    const allOsSelected = state.filters.os.length === 0 || state.filters.os.length === totalOsCount
-    const allPhpSelected = state.filters.phpVersion.length === 0 || state.filters.phpVersion.length === totalPhpCount
-    const allArchSelected = state.filters.arch.length === 0 || state.filters.arch.length === totalArchCount
-    
-    const hasDetailFilters = !(allOsSelected && allPhpSelected && allArchSelected)
+  function needsBuildsLoaded(filters: Filters = state.filters): boolean {
+    return [filters.os, filters.phpVersion, filters.arch].some(values => !!values?.length)
+  }
 
+  function filterExtensions(extensions: ProcessedExtension[], filters: Filters = state.filters): ProcessedExtension[] {
+    if ([filters.os, filters.phpVersion, filters.arch, filters.extension].includes(null)) return []
     return extensions
-      .filter((ext) => {
-        // Search filter
-        if (state.filters.search && !ext.name.toLowerCase().includes(state.filters.search.toLowerCase())) {
-          return false
+      .filter(ext => (!filters.search || ext.name.toLowerCase().includes(filters.search.toLowerCase()))
+        && (!filters.extension?.length || filters.extension.includes(ext.name)))
+      .flatMap(ext => {
+        let scoped = ext
+        if (needsBuildsLoaded(filters)) {
+          if (!ext.builds) return []
+          const builds = filterBuilds(ext.builds, filters)
+          if (!builds.length) return []
+          const pass = builds.filter(build => build.status === 'success').length
+          scoped = {
+            ...ext, builds, pass, fail: builds.length - pass, total: builds.length,
+            successRate: Math.round(pass / builds.length * 100),
+          }
         }
-        // Extension name filter
-        if (state.filters.extension.length > 0 && !state.filters.extension.includes(ext.name)) {
-          return false
-        }
-        return true
+        if (filters.status === 'success' && (scoped.fail > 0 || scoped.total === 0)) return []
+        if (filters.status === 'failure' && scoped.fail === 0) return []
+        return [scoped]
       })
-      .map((ext) => {
-        // If no detail filters, just apply status filter at extension level
-        if (!hasDetailFilters) {
-          if (state.filters.status === 'success' && ext.fail > 0) return null
-          if (state.filters.status === 'failure' && ext.fail === 0) return null
-          return ext
-        }
-        
-        // If we have detail filters, we need builds loaded
-        if (!ext.builds) {
-          // Builds not loaded yet - extension will be shown after loading
-          return ext
-        }
-        
-        const filteredBuilds = filterBuilds(ext.builds)
-        if (filteredBuilds.length === 0) return null
-        
-        const pass = filteredBuilds.filter(b => b.status === 'success').length
-        const fail = filteredBuilds.filter(b => b.status === 'failure').length
-        
-        return {
-          ...ext,
-          pass,
-          fail,
-          total: filteredBuilds.length,
-          successRate: filteredBuilds.length > 0 ? Math.round((pass / filteredBuilds.length) * 100) : 0,
-          builds: filteredBuilds,
-        }
-      })
-      .filter((ext): ext is ProcessedExtension => ext !== null)
   }
 
   function getStats(extensions: ProcessedExtension[]) {
     const stats = { total: 0, pass: 0, fail: 0, successRate: 0 }
-    
     for (const ext of extensions) {
       stats.total += ext.total
       stats.pass += ext.pass
       stats.fail += ext.fail
     }
-    
-    if (stats.total > 0) {
-      stats.successRate = Math.round((stats.pass / stats.total) * 100)
-    }
-    
+    if (stats.total) stats.successRate = Math.round(stats.pass / stats.total * 100)
     return stats
   }
 
-  // Check if we need to load builds for filtering
-  function needsBuildsLoaded(): boolean {
-    return state.filters.os.length > 0 || 
-           state.filters.phpVersion.length > 0 || 
-           state.filters.arch.length > 0
-  }
-
-  // Initialize filters with all available options selected
   function initializeFilters(metadata: Metadata) {
-    // Always set total counts for "all selected" detection
-    totalOsCount = 0
-    for (const [, data] of Object.entries(metadata.osVersions)) {
-      if (data.versions) {
-        totalOsCount += data.versions.length
-      }
+    filterOptions = {
+      os: Object.entries(metadata.osVersions).flatMap(([os, data]) => data.versions.map(version => `${os}|${version}`)),
+      phpVersion: Object.keys(metadata.phpVersions),
+      arch: metadata.architectures,
+      extension: Object.keys(metadata.extensions),
     }
-    totalPhpCount = Object.keys(metadata.phpVersions).length
-    totalArchCount = metadata.architectures.length
-
-    // Only initialize filter values if not already done and URL didn't have filters
-    if (filtersInitialized) return
-    
-    const params = new URLSearchParams(window.location.search)
-    const hasUrlFilters = params.has('os') || params.has('php') || params.has('arch')
-    
-    if (hasUrlFilters) {
-      filtersInitialized = true
-      return
+    for (const key of Object.keys(filterParams) as (keyof typeof filterParams)[]) {
+      setFilter(key, state.filters[key])
     }
-
-    // Populate OS filters with all OS versions
-    const osFilters: string[] = []
-    for (const [os, data] of Object.entries(metadata.osVersions)) {
-      if (data.versions) {
-        for (const version of data.versions) {
-          osFilters.push(`${os}|${version}`)
-        }
-      }
-    }
-    state.filters.os = osFilters
-
-    // Populate PHP version filters
-    state.filters.phpVersion = Object.keys(metadata.phpVersions).sort((a, b) => {
-      if (a === 'next') return 1
-      if (b === 'next') return -1
-      return a.localeCompare(b, undefined, { numeric: true })
-    })
-
-    // Populate architecture filters
-    state.filters.arch = [...metadata.architectures]
-
-    filtersInitialized = true
   }
 
   return {
-    state,
-    buildCache,
-    buildCacheVersion,
-    setFilter,
-    clearFilters,
-    setView,
-    setSelectedExtension,
-    loadBuilds,
-    processExtensions,
-    filterExtensions,
-    filterBuilds,
-    getStats,
-    needsBuildsLoaded,
-    initializeFilters,
+    state, buildCache, buildCacheVersion, setFilter, clearFilters, setView, setSelectedExtension,
+    loadBuilds, processExtensions, filterExtensions,
+    filterBuilds: (builds: BuildResult[]) => filterBuilds(builds, state.filters),
+    getStats, needsBuildsLoaded, initializeFilters,
   }
 }

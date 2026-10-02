@@ -250,26 +250,24 @@ describe('useStore', () => {
       expect(result[0].arch).toBe('arm64')
     })
 
-    it('filters by status', () => {
+    it('keeps the success-rate denominator when status is success', () => {
       const { filterBuilds, setFilter, clearFilters } = useStore()
       clearFilters()
       
       setFilter('status', 'success')
       const result = filterBuilds(mockBuilds)
       
-      expect(result).toHaveLength(1)
-      expect(result[0].status).toBe('success')
+      expect(result).toHaveLength(2)
     })
 
-    it('filters by failure status', () => {
+    it('keeps the success-rate denominator when status is failure', () => {
       const { filterBuilds, setFilter, clearFilters } = useStore()
       clearFilters()
 
       setFilter('status', 'failure')
       const result = filterBuilds(mockBuilds)
 
-      expect(result).toHaveLength(1)
-      expect(result[0].status).toBe('failure')
+      expect(result).toHaveLength(2)
     })
 
     it('returns all builds when no filters applied', () => {
@@ -401,15 +399,17 @@ describe('useStore', () => {
       vi.useRealTimers()
     })
 
-    it('returns empty array on fetch error', async () => {
+    it('rejects failed requests and allows a retry', async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
+        status: 503,
       } as Response)
 
       const { loadBuilds } = useStore()
       
-      const result = await loadBuilds('nonexistent.json')
-      expect(result).toEqual([])
+      await expect(loadBuilds('nonexistent.json')).rejects.toThrow('503')
+      vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => [] } as Response)
+      await expect(loadBuilds('nonexistent.json')).resolves.toEqual([])
     })
   })
 
@@ -435,7 +435,7 @@ describe('useStore', () => {
       expect(result[0].total).toBe(1)
     })
 
-    it('returns extension without builds if not loaded yet', () => {
+    it('does not present global totals as scoped totals before builds load', () => {
       const { filterExtensions, setFilter, clearFilters } = useStore()
       clearFilters()
       
@@ -446,7 +446,7 @@ describe('useStore', () => {
       ]
       
       const result = filterExtensions(extensions)
-      expect(result.length).toBe(1)
+      expect(result.length).toBe(0)
     })
 
     it('filters out extensions with no matching builds', () => {
@@ -492,6 +492,21 @@ describe('useStore', () => {
       expect(result.length).toBe(1)
       expect(result[0].total).toBe(1) // Only one build matches arm64
     })
+
+    it('selects failing extensions without removing their passing scoped builds', () => {
+      const { filterExtensions, setFilter, clearFilters } = useStore()
+      clearFilters()
+      setFilter('os', ['alpine|3.19'])
+      setFilter('status', 'failure')
+      const builds = [mockBuilds[0], { ...mockBuilds[0], arch: 'arm64', status: 'failure' as const }]
+      const ext: ProcessedExtension = { name: 'redis', version: '6.0.0', pass: 1, fail: 1, total: 2, successRate: 50, path: '', updated_at: '', builds }
+      const result = filterExtensions([ext])
+      expect(result).toHaveLength(1)
+      expect(result[0].successRate).toBe(50)
+      expect(result[0].total).toBe(2)
+      setFilter('status', 'success')
+      expect(filterExtensions([ext])).toEqual([])
+    })
   })
 
   describe('initializeFilters', () => {
@@ -509,15 +524,16 @@ describe('useStore', () => {
       extensions: {},
     }
 
-    it('initializes all selectable filters and sorts PHP next last', () => {
+    it('keeps all-selected filters implicit without requesting builds', () => {
       const { state, initializeFilters, clearFilters } = useStore()
       clearFilters()
 
       initializeFilters(metadata)
 
-      expect(state.filters.os).toEqual(['alpine|3.19', 'alpine|3.20', 'debian|bookworm'])
-      expect(state.filters.phpVersion).toEqual(['8.2', '8.3', 'next'])
-      expect(state.filters.arch).toEqual(['amd64', 'arm64'])
+      expect(state.filters.os).toEqual([])
+      expect(state.filters.phpVersion).toEqual([])
+      expect(state.filters.arch).toEqual([])
+      expect(useStore().needsBuildsLoaded()).toBe(false)
     })
 
     it('uses selected-all filters as no detail filtering', () => {
@@ -531,9 +547,32 @@ describe('useStore', () => {
 
       expect(filterExtensions(extensions)).toHaveLength(1)
     })
+
+    it('normalizes legacy full selections without losing a none selection', () => {
+      const { state, setFilter, initializeFilters, clearFilters } = useStore()
+      clearFilters()
+      setFilter('os', ['alpine|3.19', 'alpine|3.20', 'debian|bookworm'])
+      setFilter('arch', null)
+      initializeFilters(metadata)
+      expect(state.filters.os).toEqual([])
+      expect(state.filters.arch).toBeNull()
+    })
   })
 
   describe('URL state', () => {
+    it('round trips an explicit none selection', async () => {
+      vi.resetModules()
+      window.history.replaceState({}, '', '/?arch=')
+      const { useStore: useFreshStore } = await import('@/composables/useStore')
+      const { nextTick } = await import('vue')
+      const { state, setFilter, filterExtensions } = useFreshStore()
+      expect(state.filters.arch).toBeNull()
+      expect(filterExtensions([{ name: 'redis' } as ProcessedExtension])).toEqual([])
+      setFilter('os', null)
+      await nextTick()
+      expect(new URLSearchParams(window.location.search).get('os')).toBe('')
+      expect(new URLSearchParams(window.location.search).has('arch')).toBe(true)
+    })
     it('loads filters, view, and selected extension from the URL', async () => {
       vi.resetModules()
       window.history.replaceState({}, '', '/?q=redis&os=alpine|3.19&php=8.3&arch=amd64&ext=redis&status=success&view=grid&detail=redis')

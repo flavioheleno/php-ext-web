@@ -178,4 +178,20 @@ describe('FilterSidebar', () => {
     
     expect(wrapper.exists()).toBe(true)
   })
+
+  it('unchecking the last option selects none rather than all', async () => {
+    const wrapper = mount(FilterSidebar, { props: { ...defaultProps, filters: { ...defaultFilters, arch: ['amd64'] } } })
+    const checkbox = wrapper.findAll('label').find(label => label.text() === 'amd64')!.find('input')
+    await checkbox.setValue(false)
+    expect(wrapper.emitted('update:filters')!.at(-1)).toEqual([{ arch: null }])
+    await wrapper.setProps({ filters: { ...defaultFilters, arch: null } })
+    expect(wrapper.findAll('label').filter(label => ['amd64', 'arm64'].includes(label.text())).every(label => !(label.find('input').element as HTMLInputElement).checked)).toBe(true)
+    expect(wrapper.text()).toContain('None')
+  })
+
+  it('offers explicit only-selection without changing the checkbox label', async () => {
+    const wrapper = mount(FilterSidebar, { props: defaultProps })
+    await wrapper.find('button[aria-label="Only PHP 8.3"]').trigger('click')
+    expect(wrapper.emitted('update:filters')!.at(-1)).toEqual([{ phpVersion: ['8.3'] }])
+  })
 })

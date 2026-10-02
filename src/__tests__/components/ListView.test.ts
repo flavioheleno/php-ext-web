@@ -116,9 +116,9 @@ describe('ListView', () => {
       props: { extensions: mockExtensions }
     })
     
-    expect(wrapper.html()).toContain('text-green-600') // 100%
-    expect(wrapper.html()).toContain('text-amber-600') // 80%
-    expect(wrapper.html()).toContain('text-red-600') // 50%
+    expect(wrapper.html()).toContain('text-green-700') // 100%
+    expect(wrapper.html()).toContain('text-amber-700') // 80%
+    expect(wrapper.html()).toContain('text-red-700') // 50%
   })
 
   it('renders progress bar with correct color', () => {
@@ -183,7 +183,7 @@ describe('ListView', () => {
     const wrapper = mount(ListView, {
       props: { extensions: mockExtensions }
     })
-    
+
     const versionHeader = wrapper.findAll('th').find(th => th.text().includes('Version'))
     await versionHeader?.trigger('click')
     
@@ -213,5 +213,25 @@ describe('ListView', () => {
     
     // Should be sorted by updated_at
     expect(wrapper.exists()).toBe(true)
+  })
+
+  it('reports displayed order after a keyboard-activated sort', async () => {
+    const wrapper = mount(ListView, { props: { extensions: mockExtensions } })
+    await wrapper.find('th button').trigger('click')
+    const order = wrapper.emitted('update:order')!.at(-1)![0] as ProcessedExtension[]
+    expect(order.map(extension => extension.name)).toEqual(['redis', 'memcached', 'apcu'])
+    expect(wrapper.find('th').attributes('aria-sort')).toBe('descending')
+  })
+
+  it('paginates after sorting the whole result set', async () => {
+    const extensions = Array.from({ length: 30 }, (_, index) => ({ ...mockExtensions[0], name: `extension-${String(index).padStart(2, '0')}` }))
+    const wrapper = mount(ListView, { props: { extensions } })
+    expect(wrapper.findAll('tbody tr')).toHaveLength(25)
+    await wrapper.find('nav button:last-child').trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(5)
+    expect(wrapper.text()).toContain('Page 2 of 2')
+    await wrapper.setProps({ extensions: extensions.map(extension => ({ ...extension, builds: [] })) })
+    expect(wrapper.text()).toContain('Page 2 of 2')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(5)
   })
 })

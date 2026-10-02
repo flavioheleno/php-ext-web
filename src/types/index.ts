@@ -91,10 +91,11 @@ export interface ProcessedExtension {
 }
 
 export interface Filters {
-  os: string[]
-  phpVersion: string[]
-  arch: string[]
-  extension: string[]
+  // Empty arrays select all options; null explicitly selects none.
+  os: string[] | null
+  phpVersion: string[] | null
+  arch: string[] | null
+  extension: string[] | null
   status: 'all' | 'success' | 'failure'
   search: string
 }

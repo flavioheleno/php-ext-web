@@ -1,11 +1,12 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPORTS_DIR = path.join(__dirname, '../public/data/reports');
-const DATA_DIR = path.join(__dirname, '../public/data');
+const DATA_DIR = fileURLToPath(new URL('../public/data', import.meta.url));
 const LATEST_FILE = path.join(DATA_DIR, 'latest.json');
 
-function processExtensionVersion(extensionName, version) {
+export function processExtensionVersion(extensionName, version, dataDir = DATA_DIR) {
+  const REPORTS_DIR = path.join(dataDir, 'reports');
   const reportPath = path.join(REPORTS_DIR, extensionName, version + '.json');
   if (!fs.existsSync(reportPath)) return false;
 
@@ -18,15 +19,15 @@ function processExtensionVersion(extensionName, version) {
   for (const year of Object.keys(builds).sort()) {
     for (const month of Object.keys(builds[year]).sort()) {
       for (const day of Object.keys(builds[year][month]).sort()) {
-        const historyPath = path.join(DATA_DIR, builds[year][month][day]);
+        const historyPath = path.join(dataDir, builds[year][month][day]);
         const allBuilds = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
-        const extensionBuilds = allBuilds.filter(b => b.extension === extensionName);
+        const extensionBuilds = allBuilds.filter(b => b.extension === extensionName && b.extension_version === version);
         
         if (extensionBuilds.length === 0) continue;
         
         const snapshot = {
           id: extensionBuilds[0].workflow_run_id.toString(),
-          date: year + '-' + month + '-' + day,
+          date: extensionBuilds[0].started_at || year + '-' + month + '-' + day,
           trigger: 'Scheduled build',
           php_versions: {},
           platforms: {}
@@ -50,8 +51,7 @@ function processExtensionVersion(extensionName, version) {
           phpBuilds.forEach(build => {
             const key = build.platform + '-' + build.platform_version;
             if (!platformMap.has(key)) platformMap.set(key, {});
-            const arch = (build.arch === 'amd64' || build.arch === 'x86_64') ? 'x86_64' : 'aarch64';
-            platformMap.get(key)[arch] = build.status;
+            platformMap.get(key)[build.arch] = build.status;
           });
           
           snapshot.platforms[phpVersion] = [];
@@ -60,8 +60,7 @@ function processExtensionVersion(extensionName, version) {
             snapshot.platforms[phpVersion].push({
               platform: parts[0],
               version: parts.slice(1).join('-'),
-              x86_64: archs.x86_64 || 'failure',
-              aarch64: archs.aarch64 || 'failure'
+              architectures: archs
             });
           });
         });
@@ -89,6 +88,7 @@ function processAll() {
   let processed = 0, skipped = 0;
 
   for (const [name, data] of extensions) {
+    if (name === '_meta') continue;
     if (processExtensionVersion(name, data.version)) {
       processed++;
     } else {
@@ -97,15 +97,18 @@ function processAll() {
   }
 
   console.log(`\nDone: ${processed} generated, ${skipped} skipped`);
+  if (skipped > 0) throw new Error(`${skipped} extension report indexes are missing or invalid`);
 }
 
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const args = process.argv.slice(2);
 if (args[0] === '--all') {
   processAll();
 } else if (args.length === 2) {
-  processExtensionVersion(args[0], args[1]);
+  if (!processExtensionVersion(args[0], args[1])) throw new Error('Extension report index is missing or invalid');
 } else {
   console.log('Usage:');
   console.log('  bun scripts/generate-history.js <extension> <version>');
   console.log('  bun scripts/generate-history.js --all');
+}
 }

@@ -34,7 +34,7 @@ describe('StatsBar', () => {
       props: { ...defaultProps, successRate: 95 }
     })
     
-    expect(wrapper.html()).toContain('text-green-600')
+    expect(wrapper.html()).toContain('text-green-700')
   })
 
   it('applies amber color class for medium success rate (70-89%)', () => {
@@ -42,7 +42,7 @@ describe('StatsBar', () => {
       props: { ...defaultProps, successRate: 75 }
     })
     
-    expect(wrapper.html()).toContain('text-amber-600')
+    expect(wrapper.html()).toContain('text-amber-700')
   })
 
   it('applies red color class for low success rate (<70%)', () => {
@@ -50,7 +50,7 @@ describe('StatsBar', () => {
       props: { ...defaultProps, successRate: 50 }
     })
     
-    expect(wrapper.html()).toContain('text-red-600')
+    expect(wrapper.html()).toContain('text-red-700')
   })
 
   it('renders grid view button as active when currentView is grid', () => {

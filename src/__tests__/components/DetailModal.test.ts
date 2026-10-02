@@ -8,12 +8,15 @@ vi.mock('@/composables/useFormat', () => ({
   formatRelativeTime: vi.fn((date) => date ? '2 hours ago' : 'N/A')
 }))
 
-vi.mock('@/composables/useStore', () => ({
+const loadBuildsMock = vi.hoisted(() => vi.fn().mockResolvedValue([
+  { platform: 'alpine', platform_version: '3.19', php_version: '8.3', arch: 'amd64', status: 'success', log_url: 'https://example.com/log' },
+  { platform: 'debian', platform_version: 'bookworm', php_version: '8.2', arch: 'arm64', status: 'failure', log_url: 'https://example.com/log2' },
+]))
+
+vi.mock('@/composables/useStore', async importOriginal => ({
+  ...await importOriginal<typeof import('@/composables/useStore')>(),
   useStore: () => ({
-    loadBuilds: vi.fn().mockResolvedValue([
-      { platform: 'alpine', platform_version: '3.19', php_version: '8.3', arch: 'amd64', status: 'success', log_url: 'https://example.com/log' },
-      { platform: 'debian', platform_version: 'bookworm', php_version: '8.2', arch: 'arm64', status: 'failure', log_url: 'https://example.com/log2' },
-    ])
+    loadBuilds: loadBuildsMock,
   })
 }))
 
@@ -46,9 +49,6 @@ describe('DetailModal', () => {
     extensionMeta: mockExtensionMeta
   }
 
-  let addEventListenerSpy: ReturnType<typeof vi.spyOn>
-  let removeEventListenerSpy: ReturnType<typeof vi.spyOn>
-
   // Disable teleport for testing
   const mountOptions = {
     global: {
@@ -59,8 +59,7 @@ describe('DetailModal', () => {
   }
 
   beforeEach(() => {
-    addEventListenerSpy = vi.spyOn(document, 'addEventListener')
-    removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+    loadBuildsMock.mockClear()
   })
 
   afterEach(() => {
@@ -226,24 +225,28 @@ describe('DetailModal', () => {
     expect(wrapper.text()).toContain('History')
   })
 
-  it('registers keydown listener on mount', () => {
-    mount(DetailModal, {
-      props: defaultProps,
-      ...mountOptions
-    })
-    
-    expect(addEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
-  })
-
-  it('removes keydown listener on unmount', () => {
+  it('closes through native dialog cancellation', async () => {
     const wrapper = mount(DetailModal, {
       props: defaultProps,
       ...mountOptions
     })
     
+    await wrapper.find('dialog').trigger('cancel')
+    expect(wrapper.emitted('close')).toBeTruthy()
     wrapper.unmount()
+  })
+
+  it('restores scrolling on unmount', async () => {
+    document.body.style.overflow = ''
+    const wrapper = mount(DetailModal, {
+      props: defaultProps,
+      ...mountOptions
+    })
     
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+    await flushPromises()
+    expect(document.body.style.overflow).toBe('hidden')
+    wrapper.unmount()
+    expect(document.body.style.overflow).toBe('')
   })
 
   it('shows "Extension data not found" when extensionData is null', () => {
@@ -261,8 +264,7 @@ describe('DetailModal', () => {
       ...mountOptions
     })
     
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
-    expect(wrapper.find('[aria-modal="true"]').exists()).toBe(true)
+    expect(wrapper.find('dialog').attributes('aria-labelledby')).toBe('modal-title')
   })
 
   it('has dark mode classes', () => {
@@ -284,6 +286,33 @@ describe('DetailModal', () => {
     })
     
     expect(wrapper.text()).toContain('0')
+  })
+
+  it('loads builds for an initially open deep link when its data arrives', async () => {
+    const wrapper = mount(DetailModal, { props: { ...defaultProps, extensionData: null }, ...mountOptions })
+    expect(loadBuildsMock).not.toHaveBeenCalled()
+    await wrapper.setProps({ extensionData: mockExtensionData })
+    await flushPromises()
+    expect(loadBuildsMock).toHaveBeenCalledWith(mockExtensionData.path)
+    await wrapper.find('#detail-tab-builds').trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    await wrapper.find('input[type=checkbox]').setValue(true)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(wrapper.find('tbody').text()).toContain('fail')
+    wrapper.unmount()
+  })
+
+  it('keeps scoped build totals independent of the dashboard status selection', async () => {
+    const wrapper = mount(DetailModal, {
+      props: { ...defaultProps, filters: { os: [], phpVersion: [], arch: ['arm64'], extension: [], status: 'failure', search: '' } },
+      ...mountOptions,
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Selected environments')
+    expect(wrapper.text()).toContain('All Failing')
+    await wrapper.find('#detail-tab-builds').trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    wrapper.unmount()
   })
 })
 
@@ -621,6 +650,7 @@ describe('DetailModal history tab', () => {
   it('shows empty state when no history file exists', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
+      status: 404,
       json: async () => ({})
     })
 
@@ -634,7 +664,7 @@ describe('DetailModal history tab', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('No Build History')
-    expect(wrapper.text()).toContain('Build history is not available')
+    expect(wrapper.text()).toContain('No build history has been published')
   })
 
   it('shows loading state while fetching history', async () => {
@@ -715,6 +745,7 @@ describe('DetailModal history tab', () => {
   it('loads history file from correct path', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
+      status: 404,
       json: async () => ({})
     })
     global.fetch = mockFetch
@@ -725,9 +756,10 @@ describe('DetailModal history tab', () => {
     })
 
     await wrapper.setProps({ show: true })
+    await wrapper.find('#detail-tab-history').trigger('click')
     await flushPromises()
 
-    expect(mockFetch).toHaveBeenCalledWith('/data/reports/xhprof/2.3.10-history.json')
+    expect(mockFetch).toHaveBeenCalledWith('data/reports/xhprof/2.3.10-history.json')
   })
 
   it('handles fetch errors gracefully', async () => {
@@ -747,7 +779,8 @@ describe('DetailModal history tab', () => {
     await historyTab?.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('No Build History')
+    expect(wrapper.text()).toContain('Network error')
+    expect(wrapper.text()).toContain('Retry History')
     expect(consoleErrorSpy).toHaveBeenCalled()
     
     consoleErrorSpy.mockRestore()

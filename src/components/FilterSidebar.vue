@@ -16,6 +16,7 @@ const emit = defineEmits<{
 
 // Collapsible sections
 const expandedSections = ref<Set<string>>(new Set(['os', 'php', 'arch', 'ext']))
+const extensionSearch = ref('')
 
 function toggleSection(section: string) {
   if (expandedSections.value.has(section)) {
@@ -68,32 +69,32 @@ const extOptions = computed(() => {
       value: e,
     }))
 })
+const visibleExtOptions = computed(() => extOptions.value.filter(option =>
+  option.label.toLowerCase().includes(extensionSearch.value.toLowerCase())))
 
 // Count selected items for each filter (for badge display)
 const selectedCounts = computed(() => ({
-  os: props.filters.os.length === 0 ? osOptions.value.length : props.filters.os.length,
-  phpVersion: props.filters.phpVersion.length === 0 ? phpOptions.value.length : props.filters.phpVersion.length,
-  arch: props.filters.arch.length === 0 ? archOptions.value.length : props.filters.arch.length,
-  extension: props.filters.extension.length === 0 ? extOptions.value.length : props.filters.extension.length,
+  os: props.filters.os === null ? 'None' : props.filters.os.length === 0 ? 'All' : props.filters.os.length,
+  phpVersion: props.filters.phpVersion === null ? 'None' : props.filters.phpVersion.length === 0 ? 'All' : props.filters.phpVersion.length,
+  arch: props.filters.arch === null ? 'None' : props.filters.arch.length === 0 ? 'All' : props.filters.arch.length,
+  extension: props.filters.extension === null ? 'None' : props.filters.extension.length === 0 ? 'All' : props.filters.extension.length,
 }))
 
 const hasActiveFilters = computed(() => 
-  props.filters.os.length > 0 || 
-  props.filters.phpVersion.length > 0 || 
-  props.filters.arch.length > 0 || 
-  props.filters.extension.length > 0 ||
+  [props.filters.os, props.filters.phpVersion, props.filters.arch, props.filters.extension]
+    .some(values => values === null || values.length > 0) ||
   props.filters.status !== 'all' ||
   props.filters.search !== ''
 )
 
-function updateFilter(key: keyof Filters, value: unknown) {
+function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
   emit('update:filters', { [key]: value })
 }
 
 // Check if an item is effectively selected (empty = all selected)
 function isSelected(key: 'os' | 'phpVersion' | 'arch' | 'extension', value: string): boolean {
   const current = props.filters[key]
-  return current.length === 0 || current.includes(value)
+  return current !== null && (current.length === 0 || current.includes(value))
 }
 
 // Get all values for a filter type
@@ -110,26 +111,9 @@ function toggleArrayFilter(key: 'os' | 'phpVersion' | 'arch' | 'extension', valu
   const current = props.filters[key]
   const allValues = getAllValues(key)
   
-  if (current.length === 0) {
-    // Empty means all selected, so uncheck = select all except this one
-    emit('update:filters', { [key]: allValues.filter(v => v !== value) })
-  } else if (current.includes(value)) {
-    const newValues = current.filter(v => v !== value)
-    // If unchecking would leave all selected, reset to empty
-    if (newValues.length === 0) {
-      emit('update:filters', { [key]: [] })
-    } else {
-      emit('update:filters', { [key]: newValues })
-    }
-  } else {
-    const newValues = [...current, value]
-    // If checking completes the set, reset to empty (all selected)
-    if (newValues.length === allValues.length) {
-      emit('update:filters', { [key]: [] })
-    } else {
-      emit('update:filters', { [key]: newValues })
-    }
-  }
+  const selected = current === null ? [] : current.length ? current : allValues
+  const next = selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]
+  updateFilter(key, next.length === 0 ? null : next.length === allValues.length ? [] : next)
 }
 
 // Get all OS version values for a specific OS
@@ -149,31 +133,11 @@ function toggleOsGroup(os: string) {
   const allValues = getAllValues('os')
   const current = props.filters.os
   
-  if (isOsSelected(os)) {
-    // Uncheck all versions of this OS
-    if (current.length === 0) {
-      // All selected, so select all except this OS's versions
-      emit('update:filters', { os: allValues.filter(v => !osVersions.includes(v)) })
-    } else {
-      // Remove this OS's versions from selection
-      const newValues = current.filter(v => !osVersions.includes(v))
-      emit('update:filters', { os: newValues.length === 0 ? [] : newValues })
-    }
-  } else {
-    // Check all versions of this OS
-    if (current.length === 0) {
-      // All were selected, this shouldn't happen since isOsSelected would be true
-      emit('update:filters', { os: [] })
-    } else {
-      // Add all versions of this OS
-      const newValues = [...new Set([...current, ...osVersions])]
-      if (newValues.length === allValues.length) {
-        emit('update:filters', { os: [] })
-      } else {
-        emit('update:filters', { os: newValues })
-      }
-    }
-  }
+  const selected = current === null ? [] : current.length ? current : allValues
+  const next = isOsSelected(os)
+    ? selected.filter(value => !osVersions.includes(value))
+    : [...new Set([...selected, ...osVersions])]
+  updateFilter('os', next.length === 0 ? null : next.length === allValues.length ? [] : next)
 }
 </script>
 
@@ -182,12 +146,13 @@ function toggleOsGroup(os: string) {
     <div class="p-4 space-y-4">
       <!-- Status Filter (Pills) -->
       <div class="space-y-2">
-        <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</label>
+        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Extension Status</p>
         <div class="flex gap-1">
           <button
             @click="updateFilter('status', 'all')"
+            :aria-pressed="filters.status === 'all'"
             :class="[
-              'flex-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all',
+              'flex-1 px-2 py-2 text-xs font-medium rounded-lg transition-colors',
               filters.status === 'all'
                 ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 ring-1 ring-blue-200 dark:ring-blue-800'
                 : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -197,27 +162,29 @@ function toggleOsGroup(os: string) {
           </button>
           <button
             @click="updateFilter('status', 'success')"
+            :aria-pressed="filters.status === 'success'"
             :class="[
-              'flex-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all inline-flex items-center justify-center gap-1',
+              'flex-1 px-2 py-2 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1',
               filters.status === 'success'
                 ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 ring-1 ring-green-200 dark:ring-green-800'
                 : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
             ]"
           >
             <CheckIcon class="w-3 h-3 stroke-[3]" />
-            Pass
+            All Passing
           </button>
           <button
             @click="updateFilter('status', 'failure')"
+            :aria-pressed="filters.status === 'failure'"
             :class="[
-              'flex-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all inline-flex items-center justify-center gap-1',
+              'flex-1 px-2 py-2 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1',
               filters.status === 'failure'
                 ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 ring-1 ring-red-200 dark:ring-red-800'
                 : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
             ]"
           >
             <XMarkIcon class="w-3 h-3 stroke-[3]" />
-            Fail
+            Has Failures
           </button>
         </div>
       </div>
@@ -226,6 +193,7 @@ function toggleOsGroup(os: string) {
       <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <button
           @click="toggleSection('os')"
+          :aria-expanded="expandedSections.has('os')"
           class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Operating System</span>
@@ -236,22 +204,28 @@ function toggleOsGroup(os: string) {
             <ChevronDownIcon :class="['w-4 h-4 text-gray-400 transition-transform', expandedSections.has('os') && 'rotate-180']" />
           </div>
         </button>
-        <div v-show="expandedSections.has('os')" class="max-h-48 overflow-y-auto bg-white dark:bg-gray-900">
+        <div v-show="expandedSections.has('os')" class="max-h-64 overflow-y-auto bg-white dark:bg-gray-900">
+          <div class="flex justify-end gap-3 px-3 py-2 text-xs">
+            <button @click="updateFilter('os', [])" class="text-blue-700 dark:text-blue-300">Select all OS</button>
+            <button @click="updateFilter('os', null)" class="text-blue-700 dark:text-blue-300">Select no OS</button>
+          </div>
           <div v-for="os in Object.keys(metadata?.osVersions || {})" :key="os" class="border-t border-gray-100 dark:border-gray-800">
             <label class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <input
                 type="checkbox"
                 :checked="isOsSelected(os)"
+                :indeterminate="!isOsSelected(os) && getOsVersionValues(os).some(v => isSelected('os', v))"
                 @change="toggleOsGroup(os)"
                 class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300 font-mono">{{ os }}</span>
             </label>
-            <label
+            <div
               v-for="opt in osOptions.filter(o => o.group === os)"
               :key="opt.value"
-              class="flex items-center gap-2 px-3 py-1.5 pl-7 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors"
+              class="flex items-center hover:bg-blue-50 dark:hover:bg-blue-900/30"
             >
+              <label class="flex flex-1 items-center gap-2 px-3 py-2 pl-7 cursor-pointer">
               <input
                 type="checkbox"
                 :checked="isSelected('os', opt.value)"
@@ -259,7 +233,9 @@ function toggleOsGroup(os: string) {
                 class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300 font-mono">{{ opt.label }}</span>
-            </label>
+              </label>
+              <button @click="updateFilter('os', [opt.value])" :aria-label="`Only ${os} ${opt.label}`" class="px-2 py-2 text-xs text-blue-700 dark:text-blue-300">Only</button>
+            </div>
           </div>
         </div>
       </div>
@@ -268,6 +244,7 @@ function toggleOsGroup(os: string) {
       <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <button
           @click="toggleSection('php')"
+          :aria-expanded="expandedSections.has('php')"
           class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">PHP Version</span>
@@ -279,11 +256,16 @@ function toggleOsGroup(os: string) {
           </div>
         </button>
         <div v-show="expandedSections.has('php')" class="max-h-48 overflow-y-auto p-1 bg-white dark:bg-gray-900">
-          <label
+          <div class="flex justify-end gap-3 px-2 py-2 text-xs">
+            <button @click="updateFilter('phpVersion', [])" class="text-blue-700 dark:text-blue-300">Select all PHP</button>
+            <button @click="updateFilter('phpVersion', null)" class="text-blue-700 dark:text-blue-300">Select no PHP</button>
+          </div>
+          <div
             v-for="opt in phpOptions"
             :key="opt.value"
-            class="flex items-center gap-2 px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded cursor-pointer transition-colors"
+            class="flex items-center hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
           >
+            <label class="flex flex-1 items-center gap-2 px-2 py-2 cursor-pointer">
             <input
               type="checkbox"
               :checked="isSelected('phpVersion', opt.value)"
@@ -291,7 +273,9 @@ function toggleOsGroup(os: string) {
               class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300 font-mono">PHP {{ opt.label }}</span>
-          </label>
+            </label>
+            <button @click="updateFilter('phpVersion', [opt.value])" :aria-label="`Only PHP ${opt.label}`" class="px-2 py-2 text-xs text-blue-700 dark:text-blue-300">Only</button>
+          </div>
         </div>
       </div>
 
@@ -299,6 +283,7 @@ function toggleOsGroup(os: string) {
       <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <button
           @click="toggleSection('arch')"
+          :aria-expanded="expandedSections.has('arch')"
           class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Architecture</span>
@@ -310,11 +295,16 @@ function toggleOsGroup(os: string) {
           </div>
         </button>
         <div v-show="expandedSections.has('arch')" class="p-1 bg-white dark:bg-gray-900">
-          <label
+          <div class="flex justify-end gap-3 px-2 py-2 text-xs">
+            <button @click="updateFilter('arch', [])" class="text-blue-700 dark:text-blue-300">Select all architectures</button>
+            <button @click="updateFilter('arch', null)" class="text-blue-700 dark:text-blue-300">Select no architectures</button>
+          </div>
+          <div
             v-for="opt in archOptions"
             :key="opt.value"
-            class="flex items-center gap-2 px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded cursor-pointer transition-colors"
+            class="flex items-center hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
           >
+            <label class="flex flex-1 items-center gap-2 px-2 py-2 cursor-pointer">
             <input
               type="checkbox"
               :checked="isSelected('arch', opt.value)"
@@ -322,7 +312,9 @@ function toggleOsGroup(os: string) {
               class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300 font-mono">{{ opt.label }}</span>
-          </label>
+            </label>
+            <button @click="updateFilter('arch', [opt.value])" :aria-label="`Only ${opt.label}`" class="px-2 py-2 text-xs text-blue-700 dark:text-blue-300">Only</button>
+          </div>
         </div>
       </div>
 
@@ -330,6 +322,7 @@ function toggleOsGroup(os: string) {
       <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <button
           @click="toggleSection('ext')"
+          :aria-expanded="expandedSections.has('ext')"
           class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Extension</span>
@@ -340,20 +333,31 @@ function toggleOsGroup(os: string) {
             <ChevronDownIcon :class="['w-4 h-4 text-gray-400 transition-transform', expandedSections.has('ext') && 'rotate-180']" />
           </div>
         </button>
-        <div v-show="expandedSections.has('ext')" class="max-h-48 overflow-y-auto p-1 bg-white dark:bg-gray-900">
-          <label
-            v-for="opt in extOptions"
+        <div v-show="expandedSections.has('ext')" class="p-1 bg-white dark:bg-gray-900">
+          <input v-model="extensionSearch" type="search" aria-label="Find an extension filter" placeholder="Find an extension..." class="w-full px-2 py-2 text-sm bg-transparent border border-gray-300 dark:border-gray-600 rounded" />
+          <div class="flex justify-end gap-3 px-2 py-2 text-xs">
+            <button @click="updateFilter('extension', [])" class="text-blue-700 dark:text-blue-300">Select all extensions</button>
+            <button @click="updateFilter('extension', null)" class="text-blue-700 dark:text-blue-300">Select no extensions</button>
+          </div>
+          <div class="max-h-48 overflow-y-auto">
+          <div
+            v-for="opt in visibleExtOptions"
             :key="opt.value"
-            class="flex items-center gap-2 px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded cursor-pointer transition-colors"
+            class="flex items-center hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
           >
+            <label class="flex flex-1 min-w-0 items-center gap-2 px-2 py-2 cursor-pointer">
             <input
               type="checkbox"
               :checked="isSelected('extension', opt.value)"
               @change="toggleArrayFilter('extension', opt.value)"
               class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
             />
-            <span class="text-sm text-gray-700 dark:text-gray-300 font-mono">{{ opt.label }}</span>
-          </label>
+            <span class="text-sm text-gray-700 dark:text-gray-300 font-mono truncate">{{ opt.label }}</span>
+            </label>
+            <button @click="updateFilter('extension', [opt.value])" :aria-label="`Only ${opt.label}`" class="px-2 py-2 text-xs text-blue-700 dark:text-blue-300">Only</button>
+          </div>
+          <p v-if="!visibleExtOptions.length" class="p-2 text-sm text-gray-500 dark:text-gray-400">No matching extensions</p>
+          </div>
         </div>
       </div>
 

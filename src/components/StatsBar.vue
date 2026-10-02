@@ -9,6 +9,7 @@ const props = defineProps<{
   successRate: number
   currentView: 'grid' | 'list'
   search: string
+  extensionCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -17,9 +18,9 @@ const emit = defineEmits<{
 }>()
 
 const rateColorClass = computed(() => {
-  if (props.successRate >= 90) return 'text-green-600'
-  if (props.successRate >= 70) return 'text-amber-600'
-  return 'text-red-600'
+  if (props.successRate >= 90) return 'text-green-700 dark:text-green-400'
+  if (props.successRate >= 70) return 'text-amber-700 dark:text-amber-400'
+  return 'text-red-700 dark:text-red-400'
 })
 
 const rateStrokeColor = computed(() => {
@@ -31,44 +32,41 @@ const rateStrokeColor = computed(() => {
 
 <template>
   <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 transition-colors">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="space-y-4">
       <!-- Stats -->
-      <div class="flex flex-wrap items-center gap-4 sm:gap-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="flex items-center gap-2">
           <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
             <ArchiveBoxIcon class="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </div>
           <div>
             <div class="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">{{ total.toLocaleString() }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Total</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Total Builds</div>
           </div>
         </div>
 
-        <div class="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
 
         <div class="flex items-center gap-2">
           <div class="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-900/30 flex items-center justify-center">
             <CheckIcon class="w-5 h-5 text-green-600 dark:text-green-400" />
           </div>
           <div>
-            <div class="text-xl sm:text-2xl font-semibold tabular-nums text-green-600 dark:text-green-400">{{ pass.toLocaleString() }}</div>
+            <div class="text-xl sm:text-2xl font-semibold tabular-nums text-green-700 dark:text-green-400">{{ pass.toLocaleString() }}</div>
             <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Passed</div>
           </div>
         </div>
 
-        <div class="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
 
         <div class="flex items-center gap-2">
           <div class="w-10 h-10 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
             <XMarkIcon class="w-5 h-5 text-red-600 dark:text-red-400" />
           </div>
           <div>
-            <div class="text-xl sm:text-2xl font-semibold tabular-nums text-red-600 dark:text-red-400">{{ fail.toLocaleString() }}</div>
+            <div class="text-xl sm:text-2xl font-semibold tabular-nums text-red-700 dark:text-red-400">{{ fail.toLocaleString() }}</div>
             <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Failed</div>
           </div>
         </div>
 
-        <div class="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
 
         <!-- Success Rate with Progress Ring -->
         <div class="flex items-center gap-2">
@@ -92,27 +90,33 @@ const rateStrokeColor = computed(() => {
       </div>
 
       <!-- Search and View Switcher -->
-      <div class="flex items-center gap-3 self-start sm:self-auto">
+      <div class="flex flex-wrap items-center gap-3">
+        <span v-if="extensionCount !== undefined" role="status" class="w-full sm:w-auto sm:mr-auto text-sm text-gray-600 dark:text-gray-300">{{ extensionCount }} extensions shown</span>
         <!-- Search Input -->
-        <div class="relative">
+        <div class="relative flex-1 min-w-0 sm:flex-none">
           <label for="searchInput" class="sr-only">Search extensions</label>
           <input
             type="search"
             id="searchInput"
             :value="search"
             @input="emit('update:search', ($event.target as HTMLInputElement).value)"
-            class="w-48 sm:w-56 pl-9 pr-3 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow placeholder-gray-400 dark:placeholder-gray-500"
+            name="q"
+            autocomplete="off"
+            :spellcheck="false"
+            class="w-full sm:w-64 pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow placeholder-gray-400 dark:placeholder-gray-500"
             placeholder="Search extensions..."
           />
-          <MagnifyingGlassIcon class="absolute left-3 top-2 w-4 h-4 text-gray-400" />
+          <MagnifyingGlassIcon class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
         </div>
 
         <!-- View Switcher -->
         <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
           <button
             @click="emit('update:view', 'grid')"
+            :aria-pressed="currentView === 'grid'"
+            aria-label="Grid view"
             :class="[
-              'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+              'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
               currentView === 'grid'
                 ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -124,8 +128,10 @@ const rateStrokeColor = computed(() => {
           </button>
           <button
             @click="emit('update:view', 'list')"
+            :aria-pressed="currentView === 'list'"
+            aria-label="List view"
             :class="[
-              'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+              'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
               currentView === 'list'
                 ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'

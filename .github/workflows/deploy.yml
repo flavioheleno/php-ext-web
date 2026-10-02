@@ -78,6 +78,9 @@ jobs:
             cp -r /tmp/php-ext-farm-data/history public/data/
           fi
 
+          # History generation also needs the extension/version report indexes.
+          cp -r /tmp/php-ext-farm-data/reports public/data/
+
           # Cleanup
           rm -rf /tmp/php-ext-farm-data
 

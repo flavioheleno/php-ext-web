@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { XMarkIcon, CheckIcon, ChevronUpDownIcon, ChevronUpIcon, ChevronDownIcon, ArrowTopRightOnSquareIcon, CubeIcon } from '@heroicons/vue/24/outline'
 import { formatRelativeTime } from '@/composables/useFormat'
-import { useStore } from '@/composables/useStore'
-import type { LatestExtension, ExtensionMeta, BuildResult } from '@/types'
+import { filterBuilds, useStore } from '@/composables/useStore'
+import AppDialog from './AppDialog.vue'
+import type { LatestExtension, ExtensionMeta, BuildResult, Filters } from '@/types'
 
 interface HistoryDataPoint {
   snapshot_id: string
@@ -20,8 +21,9 @@ interface HistoryDataPoint {
 interface PlatformBreakdown {
   platform: string
   version: string
-  x86_64: 'success' | 'failure'
-  aarch64: 'success' | 'failure'
+  architectures?: Record<string, 'success' | 'failure'>
+  x86_64?: 'success' | 'failure'
+  aarch64?: 'success' | 'failure'
 }
 
 // Pre-processed history file format
@@ -51,6 +53,7 @@ const props = defineProps<{
   extensionName: string | null
   extensionData: LatestExtension | null
   extensionMeta: ExtensionMeta | null
+  filters?: Filters
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +65,19 @@ const builds = ref<BuildResult[]>([])
 const loadingBuilds = ref(false)
 const loadingHistory = ref(false)
 const activeTab = ref<'overview' | 'builds' | 'history'>('overview')
+const buildError = ref<string | null>(null)
+const historyError = ref<string | null>(null)
+const historyLoaded = ref(false)
+const failedOnly = ref(false)
+let loadGeneration = 0
+const hasEnvironmentFilters = computed(() => props.filters
+  && [props.filters.os, props.filters.phpVersion, props.filters.arch].some(values => values === null || values.length))
+const scopedBuilds = computed(() => props.filters ? filterBuilds(builds.value, props.filters) : builds.value)
+const summary = computed(() => {
+  if (!props.extensionData || !hasEnvironmentFilters.value) return props.extensionData
+  const pass = scopedBuilds.value.filter(build => build.status === 'success').length
+  return { ...props.extensionData, pass, fail: scopedBuilds.value.length - pass, total: scopedBuilds.value.length }
+})
 
 // History data
 const historyData = ref<HistoryDataPoint[]>([])
@@ -145,7 +161,7 @@ function getBuildSortIconType(field: BuildSortField): SortIconType {
 }
 
 const sortedBuilds = computed(() => {
-  return [...builds.value].sort((a, b) => {
+  return scopedBuilds.value.filter(build => !failedOnly.value || build.status === 'failure').sort((a, b) => {
     let cmp = 0
     switch (buildSortField.value) {
       case 'platform':
@@ -166,21 +182,15 @@ const sortedBuilds = computed(() => {
   })
 })
 
-const failedCount = computed(() => builds.value.filter(b => b.status === 'failure').length)
+const failedCount = computed(() => scopedBuilds.value.filter(b => b.status === 'failure').length)
 
 // Load pre-processed history data
-async function loadHistoryData(extensionPath: string, extensionVersion: string): Promise<HistoryDataPoint[]> {
-  try {
-    // Extract extension name from path like "history/2026/01/23/xhprof-2.3.10-21286133725.json"
-    const filename = extensionPath.split('/').pop() || ''
-    const extensionName = filename.split('-')[0] // Get "xhprof" from "xhprof-2.3.10-21286133725.json"
-    
-    const historyUrl = `/data/reports/${extensionName}/${extensionVersion}-history.json`
+async function loadHistoryData(extensionName: string, extensionVersion: string): Promise<HistoryDataPoint[]> {
+    const historyUrl = `data/reports/${encodeURIComponent(extensionName)}/${encodeURIComponent(extensionVersion)}-history.json`
     
     const response = await fetch(historyUrl)
-    if (!response.ok) {
-      return []
-    }
+    if (response.status === 404) return []
+    if (!response.ok) throw new Error(`Could not load history (${response.status}). Try again.`)
     
     const historyFile: HistoryFile = await response.json()
     
@@ -204,10 +214,6 @@ async function loadHistoryData(extensionPath: string, extensionVersion: string):
     })
     
     return historyPoints.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-  } catch (err) {
-    console.error('[History] Failed to load history data:', err)
-    return []
-  }
 }
 
 // Get unique snapshots
@@ -251,6 +257,21 @@ const historyByPhp = computed(() => {
 // Chart dimensions and scales
 const chartWidth = ref(600)
 const chartHeight = ref(300)
+const chartContainer = ref<HTMLElement | null>(null)
+let chartObserver: ResizeObserver | null = null
+let chartResizeFrame = 0
+watch(chartContainer, element => {
+  chartObserver?.disconnect()
+  cancelAnimationFrame(chartResizeFrame)
+  if (!element) return
+  chartObserver = new ResizeObserver(([entry]) => {
+    cancelAnimationFrame(chartResizeFrame)
+    chartResizeFrame = requestAnimationFrame(() => {
+      chartWidth.value = Math.max(240, entry.contentRect.width)
+    })
+  })
+  chartObserver.observe(element)
+})
 const padding = { top: 20, right: 20, bottom: 40, left: 50 }
 const plotWidth = computed(() => chartWidth.value - padding.left - padding.right)
 const plotHeight = computed(() => chartHeight.value - padding.top - padding.bottom)
@@ -311,18 +332,24 @@ function handlePointClick(phpVersion: string, snapshotIndex: number) {
   selectedHistoryPoint.value = point || null
 }
 
-function getPlatformStatus(platform: PlatformBreakdown): 'full' | 'partial' | 'fail' {
-  const x86 = platform.x86_64 === 'success'
-  const arm = platform.aarch64 === 'success'
-  
-  if (x86 && arm) return 'full'
-  if (!x86 && !arm) return 'fail'
+function platformArchitectures(platform: PlatformBreakdown): Record<string, 'success' | 'failure'> {
+  return platform.architectures || {
+    ...(platform.x86_64 ? { x86_64: platform.x86_64 } : {}),
+    ...(platform.aarch64 ? { aarch64: platform.aarch64 } : {}),
+  }
+}
+
+function getPlatformStatus(platform: PlatformBreakdown): 'full' | 'partial' | 'fail' | 'none' {
+  const statuses = Object.values(platformArchitectures(platform))
+  if (!statuses.length) return 'none'
+  if (statuses.every(status => status === 'success')) return 'full'
+  if (statuses.every(status => status === 'failure')) return 'fail'
   return 'partial'
 }
 
 const successRate = computed(() => {
-  if (!props.extensionData || props.extensionData.total === 0) return 0
-  return Math.round((props.extensionData.pass / props.extensionData.total) * 100)
+  if (!summary.value?.total) return 0
+  return Math.round((summary.value.pass / summary.value.total) * 100)
 })
 
 const statusBadgeClass = computed(() => {
@@ -332,6 +359,7 @@ const statusBadgeClass = computed(() => {
 })
 
 const statusText = computed(() => {
+  if (!summary.value?.total) return 'No Builds'
   if (successRate.value === 100) return 'All Passing'
   if (successRate.value === 0) return 'All Failing'
   return 'Partial'
@@ -349,67 +377,106 @@ const rateStrokeColor = computed(() => {
   return '#ef4444'
 })
 
-// Load builds when modal opens
-watch(() => props.show, async (show) => {
-  if (show && props.extensionData?.path) {
+async function loadBuildData(generation = loadGeneration) {
+  if (!props.extensionData?.path) return
+  const path = props.extensionData.path
+  loadingBuilds.value = true
+  buildError.value = null
+  try {
+    const results = await loadBuilds(path)
+    if (generation === loadGeneration) builds.value = results
+  } catch (error) {
+    console.error('Failed to load extension builds:', error)
+    if (generation === loadGeneration) buildError.value = error instanceof Error ? error.message : 'Could not load builds. Try again.'
+  } finally {
+    if (generation === loadGeneration) loadingBuilds.value = false
+  }
+}
+
+async function loadHistory(generation = loadGeneration) {
+  if (!props.extensionName || !props.extensionData) return
+  loadingHistory.value = true
+  historyError.value = null
+  try {
+    const results = await loadHistoryData(props.extensionName, props.extensionData.version)
+    if (generation === loadGeneration) {
+      historyData.value = results
+      historyLoaded.value = true
+    }
+  } catch (error) {
+    console.error('Failed to load extension history:', error)
+    if (generation === loadGeneration) historyError.value = error instanceof Error ? error.message : 'Could not load history. Try again.'
+  } finally {
+    if (generation === loadGeneration) loadingHistory.value = false
+  }
+}
+
+watch(() => [props.show, props.extensionData?.path, props.extensionName], () => {
+  loadGeneration++
+  if (props.show && props.extensionData?.path) {
     loadingBuilds.value = true
-    loadingHistory.value = true
+    builds.value = []
+    historyData.value = []
+    historyLoaded.value = false
+    historyError.value = null
+    loadingHistory.value = false
+    hiddenPhpVersions.value = new Set()
+    failedOnly.value = false
     activeTab.value = 'overview'
     buildSortField.value = 'platform'
     buildSortDir.value = 'asc'
     selectedHistoryPoint.value = null
     hoveredPoint.value = null
     
-    // Load real history data
-    historyData.value = await loadHistoryData(props.extensionData.path, props.extensionData.version)
-    loadingHistory.value = false
-    
-    try {
-      builds.value = await loadBuilds(props.extensionData.path)
-    } finally {
-      loadingBuilds.value = false
-    }
+    loadBuildData()
   }
+}, { immediate: true })
+
+watch(activeTab, tab => {
+  if (tab === 'history' && props.show && !historyLoaded.value && !loadingHistory.value) loadHistory()
 })
 
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.show) {
-    emit('close')
-  }
+function handleTabKey(event: KeyboardEvent) {
+  const tabs = ['overview', 'builds', 'history'] as const
+  const index = tabs.indexOf(activeTab.value)
+  let next = index
+  if (event.key === 'ArrowRight') next = (index + 1) % tabs.length
+  else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = tabs.length - 1
+  else return
+  event.preventDefault()
+  activeTab.value = tabs[next]
+  document.getElementById(`detail-tab-${activeTab.value}`)?.focus()
 }
 
-onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
-})
+function selectSnapshot(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  selectedHistoryPoint.value = historyData.value.find(point => `${point.snapshot_id}|${point.php_version}` === value) || null
+}
+
+function buildAriaSort(field: BuildSortField) {
+  return buildSortField.value === field ? buildSortDir.value === 'asc' ? 'ascending' : 'descending' : 'none'
+}
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
+  loadGeneration++
+  chartObserver?.disconnect()
+  cancelAnimationFrame(chartResizeFrame)
   if (hoverTimeout) clearTimeout(hoverTimeout)
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <Transition
-      enter-active-class="transition-opacity duration-200"
-      leave-active-class="transition-opacity duration-200"
-      enter-from-class="opacity-0"
-      leave-to-class="opacity-0"
+    <AppDialog
+      :show="show"
+      aria-labelledby="modal-title"
+      class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-2xl max-h-[90dvh] rounded-2xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-2xl"
+      @close="emit('close')"
     >
-      <div
-        v-if="show"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        role="dialog"
-        aria-modal="true"
-      >
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="$emit('close')" />
-
-        <!-- Modal content -->
         <div
-          class="relative z-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl h-[90vh] sm:h-[80vh] flex flex-col modal-enter overflow-hidden"
-          role="document"
-          :aria-labelledby="extensionName ? 'modal-title' : undefined"
+          class="h-[90dvh] sm:h-[80dvh] flex flex-col modal-enter overflow-hidden"
         >
           <!-- Header -->
           <div class="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 shrink-0">
@@ -440,6 +507,10 @@ onUnmounted(() => {
           <div class="flex border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 overflow-x-auto" role="tablist">
             <button
               @click="activeTab = 'overview'"
+              id="detail-tab-overview"
+              aria-controls="detail-panel"
+              :tabindex="activeTab === 'overview' ? 0 : -1"
+              @keydown="handleTabKey"
               role="tab"
               :aria-selected="activeTab === 'overview'"
               :class="[
@@ -453,6 +524,10 @@ onUnmounted(() => {
             </button>
             <button
               @click="activeTab = 'builds'"
+              id="detail-tab-builds"
+              aria-controls="detail-panel"
+              :tabindex="activeTab === 'builds' ? 0 : -1"
+              @keydown="handleTabKey"
               role="tab"
               :aria-selected="activeTab === 'builds'"
               :class="[
@@ -469,6 +544,10 @@ onUnmounted(() => {
             </button>
             <button
               @click="activeTab = 'history'"
+              id="detail-tab-history"
+              aria-controls="detail-panel"
+              :tabindex="activeTab === 'history' ? 0 : -1"
+              @keydown="handleTabKey"
               role="tab"
               :aria-selected="activeTab === 'history'"
               :class="[
@@ -482,20 +561,27 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto">
+          <div id="detail-panel" role="tabpanel" :aria-labelledby="`detail-tab-${activeTab}`" tabindex="0" class="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <p v-if="extensionData && activeTab !== 'history'" class="px-4 sm:px-6 pt-4 text-xs text-gray-600 dark:text-gray-300">
+              {{ hasEnvironmentFilters ? 'Selected environments' : 'All environments' }}. Status filters do not change the success-rate calculation.
+            </p>
+            <p v-if="activeTab === 'overview' && hasEnvironmentFilters && loadingBuilds" role="status" class="p-6">Loading selected environments...</p>
+            <div v-else-if="activeTab !== 'history' && buildError" role="alert" class="p-6 text-red-700 dark:text-red-400">
+              <p>{{ buildError }}</p><button @click="loadBuildData()" class="mt-3 px-3 py-2 rounded border border-current">Retry Builds</button>
+            </div>
             <div v-if="!extensionData" class="flex flex-col items-center justify-center gap-4 py-12 text-gray-500 dark:text-gray-400">
               <p>Extension data not found</p>
             </div>
 
             <!-- Overview Tab -->
-            <div v-else-if="activeTab === 'overview'" class="p-6 space-y-6">
+            <div v-else-if="activeTab === 'overview' && !buildError && !(hasEnvironmentFilters && loadingBuilds)" class="p-4 sm:p-6 space-y-6">
               <!-- Stats Cards -->
               <div class="grid grid-cols-2 gap-4">
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                   <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Builds</div>
-                  <div class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ extensionData.total }}</div>
+                  <div class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ summary?.total }}</div>
                 </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 flex items-center gap-4">
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 flex flex-wrap items-center gap-2 sm:gap-4">
                   <div class="relative w-14 h-14">
                     <svg class="w-14 h-14 -rotate-90" viewBox="0 0 36 36">
                       <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" class="dark:stroke-gray-700" stroke-width="3" />
@@ -526,7 +612,7 @@ onUnmounted(() => {
                   </div>
                   <div>
                     <div class="text-xs font-medium uppercase tracking-wider text-green-600 dark:text-green-400">Passed</div>
-                    <div class="text-2xl font-semibold tabular-nums text-green-700 dark:text-green-300">{{ extensionData.pass }}</div>
+                    <div class="text-2xl font-semibold tabular-nums text-green-700 dark:text-green-300">{{ summary?.pass }}</div>
                   </div>
                 </div>
                 <div class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl">
@@ -535,7 +621,7 @@ onUnmounted(() => {
                   </div>
                   <div>
                     <div class="text-xs font-medium uppercase tracking-wider text-red-600 dark:text-red-400">Failed</div>
-                    <div class="text-2xl font-semibold tabular-nums text-red-700 dark:text-red-300">{{ extensionData.fail }}</div>
+                    <div class="text-2xl font-semibold tabular-nums text-red-700 dark:text-red-300">{{ summary?.fail }}</div>
                   </div>
                 </div>
               </div>
@@ -573,12 +659,15 @@ onUnmounted(() => {
             </div>
 
             <!-- Builds Tab -->
-            <div v-else-if="activeTab === 'builds'" class="h-full flex flex-col min-h-0">
+            <div v-else-if="activeTab === 'builds' && !buildError" class="flex flex-col min-h-0">
+              <label class="flex items-center gap-2 px-4 sm:px-6 py-3 text-sm text-gray-700 dark:text-gray-300">
+                <input v-model="failedOnly" type="checkbox" class="w-4 h-4" /> Failed only ({{ failedCount }})
+              </label>
               <div v-if="loadingBuilds" class="flex items-center justify-center flex-1">
                 <div class="spinner"></div>
               </div>
-              <div v-else-if="builds.length === 0" class="text-center flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                No build data available
+              <div v-else-if="sortedBuilds.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                {{ failedOnly ? 'No failed builds in this scope' : 'No build data available for these environments' }}
               </div>
               <div v-else class="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div class="flex-1 overflow-y-auto">
@@ -594,47 +683,55 @@ onUnmounted(() => {
                       <tr>
                         <th 
                           @click="toggleBuildSort('platform')"
+                          :aria-sort="buildAriaSort('platform')"
+                          scope="col"
                           class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
                         >
-                          <span class="inline-flex items-center gap-1">
+                          <button class="inline-flex items-center gap-1">
                             OS
                             <ChevronUpDownIcon v-if="getBuildSortIconType('platform') === 'neutral'" class="w-3 h-3 text-gray-400" />
                             <ChevronUpIcon v-else-if="getBuildSortIconType('platform') === 'asc'" class="w-3 h-3 text-gray-400" />
                             <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
-                          </span>
+                          </button>
                         </th>
                         <th 
                           @click="toggleBuildSort('php_version')"
+                          :aria-sort="buildAriaSort('php_version')"
+                          scope="col"
                           class="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
                         >
-                          <span class="inline-flex items-center gap-1 justify-center">
+                          <button class="inline-flex items-center gap-1 justify-center">
                             PHP
                             <ChevronUpDownIcon v-if="getBuildSortIconType('php_version') === 'neutral'" class="w-3 h-3 text-gray-400" />
                             <ChevronUpIcon v-else-if="getBuildSortIconType('php_version') === 'asc'" class="w-3 h-3 text-gray-400" />
                             <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
-                          </span>
+                          </button>
                         </th>
                         <th 
                           @click="toggleBuildSort('arch')"
+                          :aria-sort="buildAriaSort('arch')"
+                          scope="col"
                           class="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
                         >
-                          <span class="inline-flex items-center gap-1 justify-center">
+                          <button class="inline-flex items-center gap-1 justify-center">
                             Arch
                             <ChevronUpDownIcon v-if="getBuildSortIconType('arch') === 'neutral'" class="w-3 h-3 text-gray-400" />
                             <ChevronUpIcon v-else-if="getBuildSortIconType('arch') === 'asc'" class="w-3 h-3 text-gray-400" />
                             <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
-                          </span>
+                          </button>
                         </th>
                         <th 
                           @click="toggleBuildSort('status')"
+                          :aria-sort="buildAriaSort('status')"
+                          scope="col"
                           class="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
                         >
-                          <span class="inline-flex items-center gap-1 justify-center">
+                          <button class="inline-flex items-center gap-1 justify-center">
                             Status
                             <ChevronUpDownIcon v-if="getBuildSortIconType('status') === 'neutral'" class="w-3 h-3 text-gray-400" />
                             <ChevronUpIcon v-else-if="getBuildSortIconType('status') === 'asc'" class="w-3 h-3 text-gray-400" />
                             <ChevronDownIcon v-else class="w-3 h-3 text-gray-400" />
-                          </span>
+                          </button>
                         </th>
                         <th class="px-4 py-2"></th>
                       </tr>
@@ -648,16 +745,16 @@ onUnmounted(() => {
                           build.status === 'failure' ? 'bg-red-50/30 dark:bg-red-900/10' : ''
                         ]"
                       >
-                        <td class="px-4 py-2 text-gray-900 dark:text-gray-100">
+                        <td class="px-2 sm:px-4 py-2 text-gray-900 dark:text-gray-100 break-words">
                           {{ build.platform }} {{ build.platform_version }}
                         </td>
-                        <td class="px-4 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs text-center">
+                        <td class="px-1 sm:px-4 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs text-center">
                           {{ build.php_version }}
                         </td>
-                        <td class="px-4 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs text-center">
+                        <td class="px-1 sm:px-4 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs text-center break-all">
                           {{ build.arch }}
                         </td>
-                        <td class="px-4 py-2 text-center">
+                        <td class="px-1 sm:px-4 py-2 text-center">
                           <span
                             :class="[
                               'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold',
@@ -671,7 +768,7 @@ onUnmounted(() => {
                             {{ build.status === 'success' ? 'pass' : 'fail' }}
                           </span>
                         </td>
-                        <td class="px-4 py-2 text-center">
+                        <td class="px-1 sm:px-4 py-2 text-center">
                           <a
                             v-if="build.log_url"
                             :href="build.log_url"
@@ -679,7 +776,7 @@ onUnmounted(() => {
                             rel="noopener"
                             class="p-1 rounded text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors inline-flex focus:outline-none focus:ring-2 focus:ring-blue-500"
                             title="View logs"
-                            aria-label="View build logs"
+                            :aria-label="`View ${extensionName} ${build.platform} ${build.platform_version} PHP ${build.php_version} ${build.arch} build logs`"
                           >
                             <ArrowTopRightOnSquareIcon class="w-4 h-4" />
                           </a>
@@ -695,7 +792,11 @@ onUnmounted(() => {
             <div v-else-if="activeTab === 'history'" class="p-4 sm:p-6 space-y-6">
               <!-- Loading state -->
               <div v-if="loadingHistory" class="flex items-center justify-center py-12">
-                <div class="spinner"></div>
+                <div class="spinner"></div><span role="status" class="sr-only">Loading history...</span>
+              </div>
+
+              <div v-else-if="historyError" role="alert" class="py-6 text-red-700 dark:text-red-400">
+                <p>{{ historyError }}</p><button @click="loadHistory()" class="mt-3 px-3 py-2 rounded border border-current">Retry History</button>
               </div>
 
               <!-- Empty state -->
@@ -705,20 +806,19 @@ onUnmounted(() => {
                 </div>
                 <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No Build History</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
-                  Build history is not available.<br>
-                  Please try again later.
+                  No build history has been published for this extension version.
                 </p>
               </div>
 
               <template v-else>
                 <div>
                   <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Success Rate Trends</h3>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">Build history across PHP versions ({{ allSnapshots.length }} builds)</p>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">All environments across PHP versions ({{ allSnapshots.length }} builds)</p>
                 </div>
 
                 <!-- Chart -->
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
-                <svg :width="chartWidth" :height="chartHeight" class="w-full max-w-full">
+                <div ref="chartContainer" class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                <svg :width="chartWidth" :height="chartHeight" :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="w-full h-auto max-w-full" role="img" aria-label="Success-rate history; use the snapshot selector below for exact values">
                   <!-- Grid lines -->
                   <g class="grid">
                     <line
@@ -752,7 +852,7 @@ onUnmounted(() => {
                   <!-- X-axis labels (show every few snapshots) -->
                   <g class="x-axis">
                     <text
-                      v-for="snapshot in allSnapshots.filter((_, i) => i % Math.ceil(allSnapshots.length / 6) === 0 || i === allSnapshots.length - 1)"
+                      v-for="snapshot in allSnapshots.filter((_, i) => i % Math.ceil(allSnapshots.length / (chartWidth < 400 ? 3 : 6)) === 0 || i === allSnapshots.length - 1)"
                       :key="snapshot.id"
                       :x="getChartX(allSnapshots.indexOf(snapshot))"
                       :y="chartHeight - padding.bottom + 20"
@@ -770,7 +870,7 @@ onUnmounted(() => {
                       :stroke="phpVersionColors[phpVersion]"
                       stroke-width="2.5"
                       fill="none"
-                      class="transition-all"
+                      class="transition-opacity"
                       :class="hoveredPoint && hoveredPoint.php !== phpVersion ? 'opacity-30' : 'opacity-100'"
                     />
                     
@@ -782,7 +882,7 @@ onUnmounted(() => {
                       :cy="getChartY(point.success_rate)"
                       r="4"
                       :fill="phpVersionColors[phpVersion]"
-                      class="cursor-pointer transition-all hover:r-6"
+                      class="cursor-pointer"
                       @mouseenter="handlePointHover(phpVersion, idx)"
                       @mouseleave="handlePointLeave"
                       @click="handlePointClick(phpVersion, allSnapshots.findIndex(s => s.id === point.snapshot_id))"
@@ -803,10 +903,19 @@ onUnmounted(() => {
                         <div class="font-bold text-sm">{{ historyByPhp.get(hoveredPoint.php)![hoveredPoint.index]?.success_rate }}%</div>
                         <div class="text-gray-300">{{ historyByPhp.get(hoveredPoint.php)![hoveredPoint.index]?.pass }}/{{ historyByPhp.get(hoveredPoint.php)![hoveredPoint.index]?.total }} passing</div>
                       </div>
+
                     </foreignObject>
                   </g>
                 </svg>
               </div>
+
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Inspect a Snapshot
+                <select @change="selectSnapshot" :value="selectedHistoryPoint ? `${selectedHistoryPoint.snapshot_id}|${selectedHistoryPoint.php_version}` : ''" class="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2">
+                  <option value="">Select a snapshot</option>
+                  <option v-for="point in historyData" :key="`${point.snapshot_id}|${point.php_version}`" :value="`${point.snapshot_id}|${point.php_version}`">{{ formatDate(point.timestamp) }} - PHP {{ point.php_version }} - {{ point.success_rate }}% ({{ point.pass }}/{{ point.total }} passing)</option>
+                </select>
+              </label>
 
               <!-- Legend -->
               <div class="flex flex-wrap gap-4 justify-center">
@@ -814,7 +923,8 @@ onUnmounted(() => {
                   v-for="phpVersion in Array.from(historyByPhp.keys())"
                   :key="phpVersion"
                   @click="togglePhpVersion(phpVersion)"
-                  class="flex items-center gap-2 px-2 py-1 rounded-md transition-all hover:bg-gray-100 dark:hover:bg-gray-700"
+                  :aria-pressed="!hiddenPhpVersions.has(phpVersion)"
+                  class="flex items-center gap-2 px-2 py-1 rounded-md transition-opacity hover:bg-gray-100 dark:hover:bg-gray-700"
                   :class="hiddenPhpVersions.has(phpVersion) ? 'opacity-40' : 'opacity-100'"
                 >
                   <div class="w-8 h-0.5 rounded" :style="{ backgroundColor: phpVersionColors[phpVersion] }"></div>
@@ -840,6 +950,7 @@ onUnmounted(() => {
                   </div>
                   <button
                     @click="selectedHistoryPoint = null"
+                    aria-label="Close snapshot details"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
                     <XMarkIcon class="w-5 h-5" />
@@ -850,24 +961,24 @@ onUnmounted(() => {
                   <div
                     v-for="platform in selectedHistoryPoint.platforms"
                     :key="`${platform.platform}-${platform.version}`"
-                    class="flex items-center gap-3"
+                    class="flex flex-wrap items-center gap-3"
                   >
                     <div class="text-sm text-gray-700 dark:text-gray-300 w-32">
                       {{ platform.platform }} {{ platform.version }}
                     </div>
-                    <div class="flex gap-1">
+                    <div class="flex flex-wrap gap-1">
                       <div
-                        v-for="arch in ['x86_64', 'aarch64']"
+                        v-for="(status, arch) in platformArchitectures(platform)"
                         :key="arch"
                         :class="[
-                          'w-6 h-6 rounded flex items-center justify-center text-xs font-bold',
-                          platform[arch as keyof PlatformBreakdown] === 'success'
+                          'px-2 py-1 rounded flex items-center justify-center text-xs font-medium',
+                          status === 'success'
                             ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400'
                             : 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
                         ]"
-                        :title="arch"
+                        :title="`${arch}: ${status === 'success' ? 'Pass' : 'Fail'}`"
                       >
-                        {{ arch === 'x86_64' ? 'x64' : 'arm' }}
+                        {{ arch }} {{ status === 'success' ? 'Pass' : 'Fail' }}
                       </div>
                     </div>
                     <div class="flex-1 flex gap-0.5">
@@ -876,7 +987,7 @@ onUnmounted(() => {
                           'h-2 rounded-full flex-1',
                           getPlatformStatus(platform) === 'full' ? 'bg-green-500' :
                           getPlatformStatus(platform) === 'partial' ? 'bg-yellow-500' :
-                          'bg-red-500'
+                          getPlatformStatus(platform) === 'fail' ? 'bg-red-500' : 'bg-gray-300'
                         ]"
                       ></div>
                     </div>
@@ -887,7 +998,6 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-      </div>
-    </Transition>
+    </AppDialog>
   </Teleport>
 </template>

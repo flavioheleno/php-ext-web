@@ -84,7 +84,7 @@ describe('GridView', () => {
     expect(wrapper.text()).toContain('8.4')
   })
 
-  it('renders architecture labels in footer', () => {
+  it('renders architecture labels in the sticky header', () => {
     const wrapper = mount(GridView, { props: defaultProps })
     
     expect(wrapper.text()).toContain('amd64')
@@ -104,13 +104,13 @@ describe('GridView', () => {
   it('applies correct CSS class for success', () => {
     const wrapper = mount(GridView, { props: defaultProps })
     
-    expect(wrapper.html()).toContain('bg-green-500')
+    expect(wrapper.html()).toContain('bg-green-600')
   })
 
   it('applies correct CSS class for failure', () => {
     const wrapper = mount(GridView, { props: defaultProps })
     
-    expect(wrapper.html()).toContain('bg-red-500')
+    expect(wrapper.html()).toContain('bg-red-600')
   })
 
   it('displays extension versions', () => {
@@ -123,7 +123,7 @@ describe('GridView', () => {
   it('has tooltip with extension info', () => {
     const wrapper = mount(GridView, { props: defaultProps })
     
-    const buttons = wrapper.findAll('button[title]')
+    const buttons = wrapper.findAll('[title]')
     const tooltips = buttons.map(b => b.attributes('title'))
     
     expect(tooltips.some(t => t?.includes('redis'))).toBe(true)
@@ -190,9 +190,16 @@ describe('GridView', () => {
     }
     const wrapper = mount(GridView, { props: filteredProps })
     
-    // Footer should only show amd64
-    const footer = wrapper.find('tfoot')
-    expect(footer.text()).toContain('amd64')
-    expect(footer.text()).not.toContain('arm64')
+    const header = wrapper.find('thead')
+    expect(header.text()).toContain('amd64')
+    expect(header.text()).not.toContain('arm64')
+  })
+
+  it('uses native links for logs and leaves missing combinations non-interactive', () => {
+    const builds = [{ ...mockBuilds[0], log_url: 'https://example.com/log' }]
+    const wrapper = mount(GridView, { props: { ...defaultProps, extensions: [{ ...mockExtensions[0], builds }] } })
+    expect(wrapper.find('a[href="https://example.com/log"]').attributes('aria-label')).toContain('amd64: Pass')
+    expect(wrapper.findAll('tbody button')).toHaveLength(1)
+    expect(wrapper.text()).toContain('No data')
   })
 })
