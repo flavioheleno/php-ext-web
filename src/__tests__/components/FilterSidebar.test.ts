@@ -128,19 +128,13 @@ describe('FilterSidebar', () => {
     expect(wrapper.text()).not.toContain('Clear All Filters')
   })
 
-  it('toggles section visibility when header is clicked', async () => {
+  it('renders sections as native collapsibles, expanded by default', () => {
     const wrapper = mount(FilterSidebar, { props: defaultProps })
-    
-    // Find PHP section header button
-    const sectionButtons = wrapper.findAll('button')
-    const phpButton = sectionButtons.find(b => b.text().includes('PHP Version'))
-    
-    // Click to collapse
-    await phpButton?.trigger('click')
-    
-    // The section should be collapsed (content hidden via v-show)
-    // We can verify the component still exists and functions
-    expect(wrapper.exists()).toBe(true)
+
+    const sections = wrapper.findAll('details')
+    expect(sections).toHaveLength(4)
+    expect(sections.every(d => d.attributes('open') !== undefined)).toBe(true)
+    expect(sections[1].find('summary').text()).toContain('PHP Version')
   })
 
   it('shows filter count badges in section headers', () => {

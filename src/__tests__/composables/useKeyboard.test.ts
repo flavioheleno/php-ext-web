@@ -44,13 +44,13 @@ describe('useKeyboard', () => {
 
   it('registers keydown listener on mount', () => {
     mountWithKeyboard({})
-    expect(document.addEventListener).toHaveBeenCalledWith('keydown', expect.any(Function))
+    expect(document.addEventListener).toHaveBeenCalledWith('keydown', expect.any(Function), undefined)
   })
 
   it('removes keydown listener on unmount', () => {
     const wrapper = mountWithKeyboard({})
     wrapper.unmount()
-    expect(document.removeEventListener).toHaveBeenCalledWith('keydown', expect.any(Function))
+    expect(document.removeEventListener).toHaveBeenCalledWith('keydown', expect.any(Function), undefined)
   })
 
   it('calls onSearch when "/" is pressed', () => {

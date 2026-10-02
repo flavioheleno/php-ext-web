@@ -14,7 +14,7 @@ import ErrorBoundary from './components/ErrorBoundary.vue'
 import { useDataLoader } from './composables/useDataLoader'
 import { useStore } from './composables/useStore'
 import { useKeyboard } from './composables/useKeyboard'
-import { useDebounce } from './composables/useDebounce'
+import { useDebounceFn } from '@vueuse/core'
 import type { Filters, LatestExtension, ProcessedExtension } from './types'
 
 const { metadata, latest, loading, error, initialize } = useDataLoader()
@@ -101,7 +101,7 @@ const selectedExtensionMeta = computed(() => {
 })
 
 // Debounced filter updates for search
-const debouncedSearch = useDebounce((value: string) => setFilter('search', value), 150)
+const debouncedSearch = useDebounceFn((value: string) => setFilter('search', value), 150)
 
 const buildPaths = computed(() => {
   if (!latest.value || [state.filters.os, state.filters.phpVersion, state.filters.arch, state.filters.extension].includes(null)) return []

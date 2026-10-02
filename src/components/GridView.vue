@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { CheckIcon, XMarkIcon, FaceFrownIcon, MinusIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
+import { comparePhpVersions } from '@/composables/useFormat'
 import type { ProcessedExtension, Metadata, LatestData, Filters } from '@/types'
 
 const props = defineProps<{
@@ -19,7 +20,7 @@ const visibleArchitectures = computed(() => props.filters.arch === null ? []
 const visiblePhpVersions = computed(() => {
   if (props.filters.phpVersion === null) return []
   return [...(props.filters.phpVersion.length ? props.filters.phpVersion : Object.keys(props.metadata?.phpVersions || {}))]
-    .sort((a, b) => a === 'next' ? 1 : b === 'next' ? -1 : a.localeCompare(b, undefined, { numeric: true }))
+    .sort(comparePhpVersions)
 })
 const visibleOsGroups = computed(() => Object.entries(props.metadata?.osVersions || {})
   .map(([os, data]) => ({

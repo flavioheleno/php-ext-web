@@ -3,15 +3,11 @@ import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 
-// Mock useDarkMode with callable functions
-const mockToggle = vi.fn()
+// Mock VueUse dark mode with callable functions
 const mockIsDark = ref(false)
 
-vi.mock('@/composables/useDarkMode', () => ({
-  useDarkMode: () => ({
-    isDark: mockIsDark,
-    toggle: mockToggle
-  })
+vi.mock('@vueuse/core', () => ({
+  useDark: () => mockIsDark
 }))
 
 describe('AppHeader', () => {
@@ -97,13 +93,13 @@ describe('AppHeader', () => {
     expect(logoContainer.find('svg').exists()).toBe(true)
   })
 
-  it('calls toggle when dark mode button is clicked', async () => {
+  it('toggles dark mode when button is clicked', async () => {
     const wrapper = mount(AppHeader, { props: defaultProps })
     
     const darkModeButton = wrapper.findAll('button').find(b => b.attributes('title')?.includes('mode'))
     await darkModeButton?.trigger('click')
     
-    expect(mockToggle).toHaveBeenCalled()
+    expect(mockIsDark.value).toBe(true)
   })
 
   it('shows sun icon when in dark mode', async () => {

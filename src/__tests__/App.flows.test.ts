@@ -3,11 +3,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import App from '@/App.vue'
 import { useStore } from '@/composables/useStore'
 
-vi.mock('@/composables/useDarkMode', async () => {
-  const { ref } = await import('vue')
-  return { useDarkMode: () => ({ isDark: ref(false), toggle: vi.fn() }) }
-})
-
 vi.mock('@/composables/useDataLoader', async () => {
   const { ref } = await import('vue')
   return {

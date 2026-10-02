@@ -1,22 +1,23 @@
+import { formatTimeAgo, type UseTimeAgoMessages } from '@vueuse/core'
+
+const messages: UseTimeAgoMessages = {
+  justNow: 'just now', past: '{0} ago', future: 'in {0}', invalid: 'N/A',
+  second: '{0}s', minute: '{0}m', hour: '{0}h', day: '{0}d', week: '{0}w', month: '{0}mo', year: '{0}y',
+}
+
+const fullDateFormatter = (date: Date) =>
+  date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+
 export function formatRelativeTime(dateString: string | null | undefined): string {
   if (!dateString) return 'N/A'
+  // max: anything 7+ days old shows the full date
+  return formatTimeAgo(new Date(dateString), { messages, fullDateFormatter, rounding: 'floor', max: 7 * 864e5 - 1 })
+}
 
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSecs = Math.floor(diffMs / 1000)
-  const diffMins = Math.floor(diffSecs / 60)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffSecs < 60) return 'just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+// Numeric version order with 'next' always last
+export function comparePhpVersions(a: string, b: string): number {
+  if (a === b) return 0
+  if (a === 'next') return 1
+  if (b === 'next') return -1
+  return a.localeCompare(b, undefined, { numeric: true })
 }

@@ -50,3 +50,10 @@ describe('useFormat', () => {
     })
   })
 })
+
+describe('comparePhpVersions', () => {
+  it('sorts numerically with next last', async () => {
+    const { comparePhpVersions } = await import('@/composables/useFormat')
+    expect(['next', '8.10', '8.2', '8.1'].sort(comparePhpVersions)).toEqual(['8.1', '8.2', '8.10', 'next'])
+  })
+})

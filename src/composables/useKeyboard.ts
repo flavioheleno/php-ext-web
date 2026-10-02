@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { useEventListener } from '@vueuse/core'
 
 interface KeyboardOptions {
   onSearch?: () => void
@@ -42,11 +42,5 @@ export function useKeyboard(options: KeyboardOptions) {
     }
   }
 
-  onMounted(() => {
-    document.addEventListener('keydown', handleKeydown)
-  })
-
-  onUnmounted(() => {
-    document.removeEventListener('keydown', handleKeydown)
-  })
+  useEventListener(document, 'keydown', handleKeydown)
 }

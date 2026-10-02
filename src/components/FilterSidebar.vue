@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { comparePhpVersions } from '@/composables/useFormat'
 import { CheckIcon, XMarkIcon, ChevronDownIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import type { Metadata, LatestData, Filters } from '@/types'
 
@@ -14,17 +15,7 @@ const emit = defineEmits<{
   'clear-filters': []
 }>()
 
-// Collapsible sections
-const expandedSections = ref<Set<string>>(new Set(['os', 'php', 'arch', 'ext']))
 const extensionSearch = ref('')
-
-function toggleSection(section: string) {
-  if (expandedSections.value.has(section)) {
-    expandedSections.value.delete(section)
-  } else {
-    expandedSections.value.add(section)
-  }
-}
 
 const osOptions = computed(() => {
   if (!props.metadata?.osVersions) return []
@@ -46,7 +37,7 @@ const osOptions = computed(() => {
 
 const phpOptions = computed(() => {
   if (!props.metadata?.phpVersions) return []
-  return Object.keys(props.metadata.phpVersions).sort().map((v) => ({
+  return Object.keys(props.metadata.phpVersions).sort(comparePhpVersions).map((v) => ({
     label: v,
     value: v,
   }))
@@ -190,21 +181,19 @@ function toggleOsGroup(os: string) {
       </div>
 
       <!-- OS Filter -->
-      <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          @click="toggleSection('os')"
-          :aria-expanded="expandedSections.has('os')"
-          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      <details open class="group border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <summary
+          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer list-none [&::-webkit-details-marker]:hidden"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Operating System</span>
           <div class="flex items-center gap-2">
             <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 text-xs font-medium rounded">
               {{ selectedCounts.os }}
             </span>
-            <ChevronDownIcon :class="['w-4 h-4 text-gray-400 transition-transform', expandedSections.has('os') && 'rotate-180']" />
+            <ChevronDownIcon class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
           </div>
-        </button>
-        <div v-show="expandedSections.has('os')" class="max-h-64 overflow-y-auto bg-white dark:bg-gray-900">
+        </summary>
+        <div class="max-h-64 overflow-y-auto bg-white dark:bg-gray-900">
           <div class="flex justify-end gap-3 px-3 py-2 text-xs">
             <button @click="updateFilter('os', [])" class="text-blue-700 dark:text-blue-300">Select all OS</button>
             <button @click="updateFilter('os', null)" class="text-blue-700 dark:text-blue-300">Select no OS</button>
@@ -238,24 +227,22 @@ function toggleOsGroup(os: string) {
             </div>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- PHP Version Filter -->
-      <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          @click="toggleSection('php')"
-          :aria-expanded="expandedSections.has('php')"
-          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      <details open class="group border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <summary
+          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer list-none [&::-webkit-details-marker]:hidden"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">PHP Version</span>
           <div class="flex items-center gap-2">
             <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 text-xs font-medium rounded">
               {{ selectedCounts.phpVersion }}
             </span>
-            <ChevronDownIcon :class="['w-4 h-4 text-gray-400 transition-transform', expandedSections.has('php') && 'rotate-180']" />
+            <ChevronDownIcon class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
           </div>
-        </button>
-        <div v-show="expandedSections.has('php')" class="max-h-48 overflow-y-auto p-1 bg-white dark:bg-gray-900">
+        </summary>
+        <div class="max-h-48 overflow-y-auto p-1 bg-white dark:bg-gray-900">
           <div class="flex justify-end gap-3 px-2 py-2 text-xs">
             <button @click="updateFilter('phpVersion', [])" class="text-blue-700 dark:text-blue-300">Select all PHP</button>
             <button @click="updateFilter('phpVersion', null)" class="text-blue-700 dark:text-blue-300">Select no PHP</button>
@@ -277,24 +264,22 @@ function toggleOsGroup(os: string) {
             <button @click="updateFilter('phpVersion', [opt.value])" :aria-label="`Only PHP ${opt.label}`" class="px-2 py-2 text-xs text-blue-700 dark:text-blue-300">Only</button>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- Architecture Filter -->
-      <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          @click="toggleSection('arch')"
-          :aria-expanded="expandedSections.has('arch')"
-          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      <details open class="group border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <summary
+          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer list-none [&::-webkit-details-marker]:hidden"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Architecture</span>
           <div class="flex items-center gap-2">
             <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 text-xs font-medium rounded">
               {{ selectedCounts.arch }}
             </span>
-            <ChevronDownIcon :class="['w-4 h-4 text-gray-400 transition-transform', expandedSections.has('arch') && 'rotate-180']" />
+            <ChevronDownIcon class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
           </div>
-        </button>
-        <div v-show="expandedSections.has('arch')" class="p-1 bg-white dark:bg-gray-900">
+        </summary>
+        <div class="p-1 bg-white dark:bg-gray-900">
           <div class="flex justify-end gap-3 px-2 py-2 text-xs">
             <button @click="updateFilter('arch', [])" class="text-blue-700 dark:text-blue-300">Select all architectures</button>
             <button @click="updateFilter('arch', null)" class="text-blue-700 dark:text-blue-300">Select no architectures</button>
@@ -316,24 +301,22 @@ function toggleOsGroup(os: string) {
             <button @click="updateFilter('arch', [opt.value])" :aria-label="`Only ${opt.label}`" class="px-2 py-2 text-xs text-blue-700 dark:text-blue-300">Only</button>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- Extension Filter -->
-      <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          @click="toggleSection('ext')"
-          :aria-expanded="expandedSections.has('ext')"
-          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      <details open class="group border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <summary
+          class="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer list-none [&::-webkit-details-marker]:hidden"
         >
           <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Extension</span>
           <div class="flex items-center gap-2">
             <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 text-xs font-medium rounded">
               {{ selectedCounts.extension }}
             </span>
-            <ChevronDownIcon :class="['w-4 h-4 text-gray-400 transition-transform', expandedSections.has('ext') && 'rotate-180']" />
+            <ChevronDownIcon class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
           </div>
-        </button>
-        <div v-show="expandedSections.has('ext')" class="p-1 bg-white dark:bg-gray-900">
+        </summary>
+        <div class="p-1 bg-white dark:bg-gray-900">
           <input v-model="extensionSearch" type="search" aria-label="Find an extension filter" placeholder="Find an extension..." class="w-full px-2 py-2 text-sm bg-transparent border border-gray-300 dark:border-gray-600 rounded" />
           <div class="flex justify-end gap-3 px-2 py-2 text-xs">
             <button @click="updateFilter('extension', [])" class="text-blue-700 dark:text-blue-300">Select all extensions</button>
@@ -359,7 +342,7 @@ function toggleOsGroup(os: string) {
           <p v-if="!visibleExtOptions.length" class="p-2 text-sm text-gray-500 dark:text-gray-400">No matching extensions</p>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- Clear Filters -->
       <button

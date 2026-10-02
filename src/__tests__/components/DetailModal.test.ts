@@ -5,7 +5,8 @@ import type { LatestExtension, ExtensionMeta } from '@/types'
 
 // Mock composables
 vi.mock('@/composables/useFormat', () => ({
-  formatRelativeTime: vi.fn((date) => date ? '2 hours ago' : 'N/A')
+  formatRelativeTime: vi.fn((date) => date ? '2 hours ago' : 'N/A'),
+  comparePhpVersions: (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
 }))
 
 const loadBuildsMock = vi.hoisted(() => vi.fn().mockResolvedValue([

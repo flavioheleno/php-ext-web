@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { XMarkIcon, CheckIcon, ChevronUpDownIcon, ChevronUpIcon, ChevronDownIcon, ArrowTopRightOnSquareIcon, CubeIcon } from '@heroicons/vue/24/outline'
-import { formatRelativeTime } from '@/composables/useFormat'
+import { useDebounceFn } from '@vueuse/core'
+import { formatRelativeTime, comparePhpVersions } from '@/composables/useFormat'
 import { filterBuilds, useStore } from '@/composables/useStore'
 import AppDialog from './AppDialog.vue'
 import type { LatestExtension, ExtensionMeta, BuildResult, Filters } from '@/types'
@@ -94,19 +95,17 @@ function togglePhpVersion(phpVersion: string) {
   hiddenPhpVersions.value = new Set(hiddenPhpVersions.value) // trigger reactivity
 }
 
-// Debounce hover to reduce re-renders
-let hoverTimeout: ReturnType<typeof setTimeout> | null = null
+// Debounce hover to reduce re-renders; leave goes through it too so a pending hover can't win
+const setHoveredPoint = useDebounceFn((point: { php: string; index: number } | null) => {
+  hoveredPoint.value = point
+}, 50)
 
 function handlePointHover(phpVersion: string, index: number) {
-  if (hoverTimeout) clearTimeout(hoverTimeout)
-  hoverTimeout = setTimeout(() => {
-    hoveredPoint.value = { php: phpVersion, index }
-  }, 50)
+  setHoveredPoint({ php: phpVersion, index })
 }
 
 function handlePointLeave() {
-  if (hoverTimeout) clearTimeout(hoverTimeout)
-  hoveredPoint.value = null
+  setHoveredPoint(null)
 }
 
 // Smart tooltip positioning
@@ -169,7 +168,7 @@ const sortedBuilds = computed(() => {
           || a.platform_version.localeCompare(b.platform_version, undefined, { numeric: true })
         break
       case 'php_version':
-        cmp = a.php_version.localeCompare(b.php_version, undefined, { numeric: true })
+        cmp = comparePhpVersions(a.php_version, b.php_version)
         break
       case 'arch':
         cmp = a.arch.localeCompare(b.arch)
@@ -463,7 +462,6 @@ onUnmounted(() => {
   loadGeneration++
   chartObserver?.disconnect()
   cancelAnimationFrame(chartResizeFrame)
-  if (hoverTimeout) clearTimeout(hoverTimeout)
 })
 </script>
 

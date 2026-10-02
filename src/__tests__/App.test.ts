@@ -52,16 +52,6 @@ vi.mock('@/composables/useDataLoader', () => ({
   })
 }))
 
-vi.mock('@/composables/useDarkMode', () => ({
-  useDarkMode: () => ({
-    isDark: ref(false),
-    toggle: vi.fn(),
-    set: vi.fn(),
-    reset: vi.fn(),
-    userHasPreference: ref(false)
-  })
-}))
-
 vi.mock('@/composables/useStore', () => ({
   useStore: () => ({
     state: storeState,
@@ -88,8 +78,9 @@ vi.mock('@/composables/useKeyboard', () => ({
   }
 }))
 
-vi.mock('@/composables/useDebounce', () => ({
-  useDebounce: vi.fn((fn) => fn)
+vi.mock('@vueuse/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@vueuse/core')>()),
+  useDebounceFn: vi.fn((fn) => fn)
 }))
 
 import App from '@/App.vue'

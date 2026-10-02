@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Bars3Icon, CubeIcon, SunIcon, MoonIcon } from '@heroicons/vue/24/outline'
-import { useDarkMode } from '@/composables/useDarkMode'
+import { useDark } from '@vueuse/core'
 
 defineProps<{
   title: string
@@ -13,7 +13,7 @@ defineEmits<{
   'toggle-sidebar': []
 }>()
 
-const { isDark, toggle } = useDarkMode()
+const isDark = useDark({ storageKey: 'theme' })
 </script>
 
 <template>
@@ -57,7 +57,7 @@ const { isDark, toggle } = useDarkMode()
 
         <!-- Dark mode toggle -->
         <button
-          @click="toggle"
+          @click="isDark = !isDark"
           class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
           :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
           :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
