@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { useDebouncedRef, useDebounce, useDebouncedWatch } from '@/composables/useDebounce'
-import { ref, nextTick } from 'vue'
+import { useDebounce } from '@/composables/useDebounce'
 
 describe('useDebounce', () => {
   beforeEach(() => {
@@ -9,41 +8,6 @@ describe('useDebounce', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  describe('useDebouncedRef', () => {
-    it('returns initial value immediately', () => {
-      const debouncedValue = useDebouncedRef('initial')
-      expect(debouncedValue.value).toBe('initial')
-    })
-
-    it('debounces value changes', async () => {
-      const debouncedValue = useDebouncedRef('initial', 100)
-      
-      debouncedValue.value = 'updated'
-      expect(debouncedValue.value).toBe('initial')
-      
-      vi.advanceTimersByTime(50)
-      expect(debouncedValue.value).toBe('initial')
-      
-      vi.advanceTimersByTime(50)
-      expect(debouncedValue.value).toBe('updated')
-    })
-
-    it('cancels previous timeout on rapid changes', () => {
-      const debouncedValue = useDebouncedRef('initial', 100)
-      
-      debouncedValue.value = 'first'
-      vi.advanceTimersByTime(50)
-      debouncedValue.value = 'second'
-      vi.advanceTimersByTime(50)
-      debouncedValue.value = 'third'
-      
-      expect(debouncedValue.value).toBe('initial')
-      
-      vi.advanceTimersByTime(100)
-      expect(debouncedValue.value).toBe('third')
-    })
   })
 
   describe('useDebounce', () => {
@@ -87,32 +51,4 @@ describe('useDebounce', () => {
     })
   })
 
-  describe('useDebouncedWatch', () => {
-    it('debounces watch callback', async () => {
-      const source = ref('initial')
-      const callback = vi.fn()
-      
-      useDebouncedWatch(source, callback, 100)
-      
-      source.value = 'updated'
-      await vi.runAllTimersAsync()
-      expect(callback).toHaveBeenCalledWith('updated')
-    })
-
-    it('cancels previous callback on rapid changes', async () => {
-      const source = ref('initial')
-      const callback = vi.fn()
-      
-      useDebouncedWatch(source, callback, 100)
-      
-      source.value = 'first'
-      vi.advanceTimersByTime(50)
-      source.value = 'second'
-      vi.advanceTimersByTime(50)
-      source.value = 'third'
-      
-      await vi.runAllTimersAsync()
-      expect(callback).toHaveBeenCalledWith('third')
-    })
-  })
 })

@@ -47,20 +47,6 @@ export function useDarkMode() {
     localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
   }
 
-  // Set specific value and save preference
-  function set(dark: boolean) {
-    isDark.value = dark
-    userHasPreference.value = true
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
-  }
-
-  // Reset to follow system preference
-  function reset() {
-    localStorage.removeItem('theme')
-    userHasPreference.value = false
-    isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
-  }
-
   // Apply class to document when isDark changes
   watch(isDark, (dark) => {
     if (dark) {
@@ -72,9 +58,6 @@ export function useDarkMode() {
 
   return {
     isDark,
-    userHasPreference,
     toggle,
-    set,
-    reset,
   }
 }
