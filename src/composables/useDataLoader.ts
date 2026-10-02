@@ -1,22 +1,12 @@
 import { ref, type Ref } from 'vue'
 import type { LatestData, Metadata, OsVersions, PhpVersions, Extensions } from '@/types'
 
-const cache = new Map<string, { data: unknown; timestamp: number }>()
-const TTL = 5 * 60 * 1000 // 5 minutes
-
 async function fetchJSON<T>(path: string): Promise<T> {
-  const cached = cache.get(path)
-  if (cached && Date.now() - cached.timestamp < TTL) {
-    return cached.data as T
-  }
-
   const response = await fetch(`data/${path}`)
   if (!response.ok) {
     throw new Error(`Failed to load ${path}: ${response.status}`)
   }
-  const data = await response.json()
-  cache.set(path, { data, timestamp: Date.now() })
-  return data
+  return response.json()
 }
 
 export function useDataLoader() {

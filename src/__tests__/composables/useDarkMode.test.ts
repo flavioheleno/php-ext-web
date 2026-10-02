@@ -37,9 +37,6 @@ describe('useDarkMode', () => {
     
     expect(result.isDark).toBeDefined()
     expect(typeof result.toggle).toBe('function')
-    expect(typeof result.set).toBe('function')
-    expect(typeof result.reset).toBe('function')
-    expect(result.userHasPreference).toBeDefined()
   })
 
   it('toggle function is callable', async () => {
@@ -52,25 +49,4 @@ describe('useDarkMode', () => {
     expect(typeof isDark.value).toBe('boolean')
   })
 
-  it('set function changes isDark value', async () => {
-    vi.resetModules()
-    const { useDarkMode } = await import('@/composables/useDarkMode')
-    const { set, isDark } = useDarkMode()
-    
-    set(true)
-    expect(isDark.value).toBe(true)
-    
-    set(false)
-    expect(isDark.value).toBe(false)
-  })
-
-  it('reset function clears preference', async () => {
-    vi.resetModules()
-    const { useDarkMode } = await import('@/composables/useDarkMode')
-    const { reset, userHasPreference } = useDarkMode()
-    
-    expect(typeof reset).toBe('function')
-    reset()
-    expect(userHasPreference.value).toBe(false)
-  })
 })

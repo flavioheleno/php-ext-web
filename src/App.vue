@@ -18,7 +18,7 @@ import { useDebounce } from './composables/useDebounce'
 import type { Filters, LatestExtension, ProcessedExtension } from './types'
 
 const { metadata, latest, loading, error, initialize } = useDataLoader()
-const { state, buildCacheVersion, setFilter, clearFilters, setView, setSelectedExtension, loadBuilds, processExtensions, filterExtensions, getStats, needsBuildsLoaded, initializeFilters } = useStore()
+const { state, setFilter, clearFilters, setView, setSelectedExtension, loadBuilds, processExtensions, filterExtensions, getStats, needsBuildsLoaded, initializeFilters } = useStore()
 
 const showMobileSidebar = ref(false)
 const highlightedIndex = ref(-1)
@@ -35,8 +35,6 @@ function isLatestExtension(value: unknown): value is LatestExtension {
 }
 
 const extensions = computed(() => {
-  // Trigger reactivity when builds are loaded
-  void buildCacheVersion.value
   const processed = processExtensions(latest.value, metadata.value?.extensions)
   return filterExtensions(processed)
 })

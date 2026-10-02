@@ -10,7 +10,6 @@ const state = reactive({
 })
 
 const buildCache = ref(new Map<string, BuildResult[]>())
-const buildCacheVersion = ref(0)
 const pendingBuilds = new Map<string, Promise<BuildResult[]>>()
 const filterParams = { os: 'os', phpVersion: 'php', arch: 'arch', extension: 'ext' } as const
 let filterOptions: Partial<Record<keyof typeof filterParams, string[]>> = {}
@@ -86,7 +85,6 @@ export function useStore() {
         if (!response.ok) throw new Error(`Could not load build results (${response.status}). Try again.`)
         const builds: BuildResult[] = await response.json()
         buildCache.value.set(path, builds)
-        buildCacheVersion.value++
         return builds
       } finally {
         pendingBuilds.delete(path)
@@ -160,7 +158,7 @@ export function useStore() {
   }
 
   return {
-    state, buildCache, buildCacheVersion, setFilter, clearFilters, setView, setSelectedExtension,
+    state, buildCache, setFilter, clearFilters, setView, setSelectedExtension,
     loadBuilds, processExtensions, filterExtensions,
     filterBuilds: (builds: BuildResult[]) => filterBuilds(builds, state.filters),
     getStats, needsBuildsLoaded, initializeFilters,
