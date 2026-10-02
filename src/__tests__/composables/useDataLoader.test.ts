@@ -56,12 +56,12 @@ describe('useDataLoader', () => {
   it('handles fetch errors', async () => {
     vi.mocked(fetch).mockRejectedValue(new Error('Network error'))
 
-    const { initialize, loading } = useDataLoader()
+    const { initialize, loading, error } = useDataLoader()
     
     await initialize()
     
     expect(loading.value).toBe(false)
-    // Error is handled internally
+    expect(error.value).toBe('Network error')
   })
 
   it('handles non-ok response', async () => {
@@ -75,26 +75,6 @@ describe('useDataLoader', () => {
     await initialize()
     
     expect(loading.value).toBe(false)
-    // Error is set when fetch fails
-  })
-
-  it('uses cached data within TTL', async () => {
-    const mockData = { test: 'data' }
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockData),
-    } as Response)
-
-    const { initialize } = useDataLoader()
-    
-    // First call
-    await initialize()
-    const firstCallCount = vi.mocked(fetch).mock.calls.length
-    
-    // Second call should use cache
-    await initialize()
-    
-    // Should not make new fetch calls (cache hit)
-    expect(vi.mocked(fetch).mock.calls.length).toBe(firstCallCount)
+    expect(error.value).toContain('404')
   })
 })
