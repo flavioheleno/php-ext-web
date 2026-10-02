@@ -24,7 +24,7 @@ const state = reactive({
 
 // Cache for loaded build reports
 const buildCache = ref<Map<string, BuildResult[]>>(new Map())
-const loadingBuilds = ref<Set<string>>(new Set())
+const loadingBuilds = new Map<string, Promise<BuildResult[]>>()
 
 // Sync state to URL
 function syncToUrl() {
@@ -101,31 +101,27 @@ export function useStore() {
     state.selectedExtension = name
   }
 
-  async function loadBuilds(path: string): Promise<BuildResult[]> {
-    if (buildCache.value.has(path)) {
-      return buildCache.value.get(path)!
+  function loadBuilds(path: string): Promise<BuildResult[]> {
+    const cached = buildCache.value.get(path)
+    if (cached) return Promise.resolve(cached)
+
+    let inFlight = loadingBuilds.get(path)
+    if (!inFlight) {
+      inFlight = fetch(`/data/${path}`)
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to load builds')
+          return response.json()
+        })
+        .then((builds: BuildResult[]) => {
+          buildCache.value.set(path, builds)
+          return builds
+        })
+        .catch(() => [] as BuildResult[])
+        .finally(() => loadingBuilds.delete(path))
+      loadingBuilds.set(path, inFlight)
     }
-    
-    if (loadingBuilds.value.has(path)) {
-      // Wait for existing load to complete
-      while (loadingBuilds.value.has(path)) {
-        await new Promise(resolve => setTimeout(resolve, 50))
-      }
-      return buildCache.value.get(path) || []
-    }
-    
-    loadingBuilds.value.add(path)
-    try {
-      const response = await fetch(`/data/${path}`)
-      if (!response.ok) throw new Error('Failed to load builds')
-      const builds = await response.json()
-      buildCache.value.set(path, builds)
-      return builds
-    } catch {
-      return []
-    } finally {
-      loadingBuilds.value.delete(path)
-    }
+
+    return inFlight
   }
 
   function processExtensions(latest: LatestData | null, _extensions: Record<string, unknown> = {}): ProcessedExtension[] {

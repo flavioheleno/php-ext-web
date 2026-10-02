@@ -392,8 +392,7 @@ describe('useStore', () => {
       expect(vi.mocked(fetch).mock.calls.length).toBe(fetchCount)
     })
 
-    it('waits for an in-flight build load for the same path', async () => {
-      vi.useFakeTimers()
+    it('dedupes concurrent loads for the same path', async () => {
       const mockBuilds = [{ status: 'success' }]
       let resolveFetch: ((value: Response) => void) | undefined
       vi.mocked(fetch).mockReturnValue(new Promise<Response>((resolve) => {
@@ -410,12 +409,9 @@ describe('useStore', () => {
         json: () => Promise.resolve(mockBuilds),
       } as Response)
 
-      await firstLoad
-      await vi.runOnlyPendingTimersAsync()
-
+      await expect(firstLoad).resolves.toEqual(mockBuilds)
       await expect(secondLoad).resolves.toEqual(mockBuilds)
       expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
-      vi.useRealTimers()
     })
 
     it('returns empty array on fetch error', async () => {
